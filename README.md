@@ -10,7 +10,7 @@ Runs **100% in the browser** using pure HTML5, CSS3, and modern Vanilla JavaScri
 
 - **28 Hands-On Interactive Lab Tasks** covering CEH v13 Modules 1 through 5.
 - **Dual-Mode System**:
-  - **🎓 Tutor Education Mode** (`admin`): Designed for instructors/tutors to demonstrate commands, review output talking points, reveal unmasked evidence, and guide students with zero point penalties.
+  - **🎓 Tutor Education Mode**: Designed for instructors/tutors to demonstrate commands, review output talking points, reveal unmasked evidence, and guide students with zero point penalties.
   - **🎯 Colleague CTF Practice Mode**: Students create a profile, manually type commands into the simulated CLI, earn +100 points per solve, answer post-scan concept questions (+25 points), and compete on the live CTF Leaderboard.
 - **Simulated Linux & Windows CLI Terminals**:
   - Realistic prompts: `root@parrot:~#`, `msf6 >`, and `C:\Users\Administrator>`.
@@ -90,14 +90,6 @@ git commit -m "Add new lab questions and update cheat sheet"
 # 4. Push updates to GitHub
 git push
 ```
-
----
-
-## 🔒 Default Tutor Credentials
-
-- **Username**: `admin`
-- **Password**: `Pa$$w0rd`
-*(Note: These credentials are encrypted in local storage logic and not exposed on the public signup screen.)*
 
 ---
 
