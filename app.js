@@ -12,9 +12,36 @@ let currentUser = null;
 // Seed initial leaderboard (Empty by default for a fresh experience)
 const DEFAULT_LEADERBOARD = [];
 
-// Preserves all registered accounts
+// Purge legacy mock data from local storage
 function cleanMockData() {
-  // Keep all registered student data intact
+  const legacyMockUsers = ["ahmed_sec", "fahad_cyber", "sara_ethical", "khalid_net", "testuser"];
+  try {
+    const rawUsers = localStorage.getItem("ceh_users");
+    if (rawUsers) {
+      const users = JSON.parse(rawUsers);
+      let changed = false;
+      for (const key of Object.keys(users)) {
+        if (legacyMockUsers.includes(key.toLowerCase())) {
+          delete users[key];
+          changed = true;
+        }
+      }
+      if (changed) {
+        localStorage.setItem("ceh_users", JSON.stringify(users));
+      }
+    }
+
+    const rawLb = localStorage.getItem("ceh_leaderboard");
+    if (rawLb) {
+      const lb = JSON.parse(rawLb);
+      if (Array.isArray(lb)) {
+        const filtered = lb.filter(x => !legacyMockUsers.includes((x.username || "").toLowerCase()));
+        if (filtered.length !== lb.length) {
+          localStorage.setItem("ceh_leaderboard", JSON.stringify(filtered));
+        }
+      }
+    }
+  } catch (e) {}
 }
 
 function getStoredUsers() {
@@ -2027,9 +2054,14 @@ function renderAdminStudentTable(students) {
       <td style="color: var(--accent-yellow); font-weight: 700; font-size: 0.88rem;">${s.score || 0} pts</td>
       <td style="color: var(--text-muted); font-size: 0.76rem;">${escapeHtml(s.lastActive || "Recently")}</td>
       <td style="text-align: center;">
-        <button onclick="adminResetStudent('${escapeHtml(s.username)}')" class="btn-header" style="padding: 3px 8px; font-size: 0.72rem; color: var(--accent-red); border-color: rgba(255,82,82,0.3);" title="Reset progress for ${escapeHtml(s.username)}">
-          🔄 Reset
-        </button>
+        <div style="display: flex; gap: 4px; justify-content: center; align-items: center;">
+          <button onclick="adminResetStudent('${escapeHtml(s.username)}')" class="btn-header" style="padding: 3px 8px; font-size: 0.72rem; color: var(--accent-yellow); border-color: rgba(255,215,0,0.3);" title="Reset progress to 0 for ${escapeHtml(s.username)}">
+            🔄 Reset
+          </button>
+          <button onclick="adminDeleteStudent('${escapeHtml(s.username)}')" class="btn-header" style="padding: 3px 8px; font-size: 0.72rem; color: var(--accent-red); border-color: rgba(255,82,82,0.4); background: rgba(255,82,82,0.08);" title="Delete account permanently for ${escapeHtml(s.username)}">
+            🗑️ Delete
+          </button>
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
@@ -2205,6 +2237,63 @@ async function adminResetStudent(username) {
   }
 
   alert(`Student '${username}' progress has been reset.`);
+  await refreshAdminPortal();
+}
+
+async function adminDeleteStudent(username) {
+  if (!username || username.toLowerCase() === "admin") {
+    alert("Cannot delete administrator account.");
+    return;
+  }
+
+  if (!confirm(`⚠️ PERMANENT DELETE\n\nAre you sure you want to permanently delete student account '${username}'?\n\nThis will remove their login credentials, task progress, and leaderboard record.`)) {
+    return;
+  }
+
+  // 1. Try Vercel Serverless API
+  try {
+    const url = getApiUrl() + "?action=admin_delete_user";
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username })
+    });
+  } catch (e) {
+    console.warn("Vercel admin_delete_user error:", e);
+  }
+
+  // 2. Direct fallback to KV Bucket
+  try {
+    const users = await fetchDirectCloudUsers();
+    if (users[username]) {
+      delete users[username];
+      await saveDirectCloudUsers(users);
+    }
+
+    const leaderboard = await fetchDirectCloudLeaderboard();
+    const updatedLb = (leaderboard || []).filter(x => x.username.toLowerCase() !== username.toLowerCase());
+    await saveDirectCloudLeaderboard(updatedLb);
+    saveLeaderboard(updatedLb);
+  } catch (err) {
+    console.warn("Direct KV delete error:", err);
+  }
+
+  // 3. Local Cache deletion
+  const localUsers = getStoredUsers();
+  if (localUsers[username]) {
+    delete localUsers[username];
+    saveStoredUsers(localUsers);
+  }
+  let localLb = getLeaderboard();
+  localLb = localLb.filter(x => x.username.toLowerCase() !== username.toLowerCase());
+  saveLeaderboard(localLb);
+
+  // If deleted user was currently logged in in this session, sign them out
+  if (currentUser && currentUser.username.toLowerCase() === username.toLowerCase()) {
+    handleSignOut();
+  }
+
+  alert(`Student '${username}' has been permanently deleted.`);
   await refreshAdminPortal();
 }
 

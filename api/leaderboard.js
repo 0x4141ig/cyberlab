@@ -589,6 +589,28 @@ export default async function handler(req, res) {
       return res.status(200).json({ status: 'ok' });
     }
 
+    // Action: Admin Delete User Account Permanently
+    if (req.method === 'POST' && action === 'admin_delete_user') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      const { username } = body || {};
+      const cleanUser = (username || '').trim();
+      if (!cleanUser || cleanUser.toLowerCase() === 'admin') {
+        return res.status(400).json({ error: 'Cannot delete admin account or empty username' });
+      }
+
+      const users = await getKvUsers();
+      if (users[cleanUser]) {
+        delete users[cleanUser];
+        await saveKvUsers(users);
+      }
+
+      const leaderboard = await getKvLeaderboard();
+      const updatedLb = leaderboard.filter(x => x.username.toLowerCase() !== cleanUser.toLowerCase());
+      await saveKvLeaderboard(updatedLb);
+
+      return res.status(200).json({ status: 'ok', deleted: cleanUser });
+    }
+
     // Default GET: Fetch Leaderboard
     if (req.method === 'GET') {
       const leaderboard = await getKvLeaderboard();
