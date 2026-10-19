@@ -565,7 +565,7 @@ export default async function handler(req, res) {
         updatedAt: u.updatedAt || Date.now()
       }));
       userList.sort((a, b) => b.score - a.score || b.solvedCount - a.solvedCount);
-      return res.status(200).json({ status: 'ok', users: userList });
+      return res.status(200).json({ status: 'ok', users: userList, debug: { bucket: KV_BUCKET_BASE, rawKeys: Object.keys(users) } });
     }
 
     // Action: Admin Reset User Progress
