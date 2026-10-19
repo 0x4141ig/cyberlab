@@ -670,10 +670,10 @@ function saveCurrentUser() {
 }
 
 // Supabase Cloud Configuration
-// When you provide your Supabase URL & Anon Key, it syncs directly from all browsers!
+// Can be set directly, via localStorage, or via window.SUPABASE_URL
 const SUPABASE_CONFIG = {
-  url: window.SUPABASE_URL || "", // e.g. "https://xxxx.supabase.co"
-  anonKey: window.SUPABASE_ANON_KEY || ""
+  url: localStorage.getItem("ceh_supabase_url") || window.SUPABASE_URL || "",
+  anonKey: localStorage.getItem("ceh_supabase_key") || window.SUPABASE_ANON_KEY || ""
 };
 
 function getApiUrl() {
