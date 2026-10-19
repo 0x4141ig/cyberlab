@@ -28,13 +28,18 @@
       <!-- User Profile & Switcher -->
       <button class="user-profile-btn" onclick="openAuthModal()" title="Switch User / Login">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-        <span id="userDisplay">admin</span>
+        <span id="userDisplay">Sign In</span>
       </button>
 
       <!-- Score Display -->
       <div class="user-score-pill" title="Current CTF Points">
         ⭐ <span id="userScore">0 pts</span>
       </div>
+
+      <!-- Sign Out / Switch Button -->
+      <button class="btn-header" id="btnSignOut" onclick="handleSignOut()" title="Switch Account / Sign Out" style="display: none;">
+        Sign Out
+      </button>
 
       <!-- Leaderboard Button -->
       <button class="btn-header btn-leaderboard" onclick="openLeaderboard()">
@@ -234,10 +239,13 @@
   <div class="modal-overlay" id="authModal">
     <div class="modal-card" style="max-width: 420px;">
       <div class="modal-header">
-        <h3 style="font-size: 1.05rem; color: var(--accent-cyan);">User Login & Practice Registration</h3>
-        <button class="modal-close" onclick="closeAuthModal()">&times;</button>
+        <h3 style="font-size: 1.05rem; color: var(--accent-cyan);">CEH v13 Lab Authentication</h3>
+        <button class="modal-close" id="authModalClose" onclick="closeAuthModal()">&times;</button>
       </div>
       <div class="modal-body">
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45;">
+          Welcome! Please sign in to your account or create a practice username to enter the labs and track your CTF progress.
+        </p>
         <div class="auth-tabs">
           <button class="auth-tab active" id="tabLogin" onclick="setAuthTab('login')">Sign In</button>
           <button class="auth-tab" id="tabSignup" onclick="setAuthTab('signup')">Sign Up (Practice)</button>

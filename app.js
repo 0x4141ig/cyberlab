@@ -6,28 +6,51 @@ let historyIndex = -1;
 let currentFilter = "all";
 let trackerEnabled = false; // Live Keystroke Highlight Tracker (optional, hidden by default for pro users)
 
-// Current User Session State
-let currentUser = {
-  username: "admin",
-  role: "admin", // "admin" (Tutor) or "student" (Colleague)
-  score: 0,
-  solved: [],
-  conceptSolved: [],
-  penalties: {} // qId: penalty points
-};
+// Current User Session State (null on initial load until authenticated)
+let currentUser = null;
 
-// Seed initial leaderboard if empty
-const DEFAULT_LEADERBOARD = [
-  { username: "Ahmed_Sec", score: 2650, solvedCount: 25, lastActive: "12m ago" },
-  { username: "Fahad_Cyber", score: 2300, solvedCount: 22, lastActive: "25m ago" },
-  { username: "Sara_Ethical", score: 1950, solvedCount: 19, lastActive: "41m ago" },
-  { username: "Khalid_Net", score: 1400, solvedCount: 14, lastActive: "1h ago" }
-];
+// Seed initial leaderboard (Empty by default for a fresh experience)
+const DEFAULT_LEADERBOARD = [];
+
+// Clean up any old mock test users from previous testing
+function cleanMockData() {
+  const mockNames = ["ahmed_sec", "fahad_cyber", "sara_ethical", "khalid_net"];
+  try {
+    const rawLb = localStorage.getItem("ceh_leaderboard");
+    if (rawLb) {
+      const lb = JSON.parse(rawLb);
+      if (Array.isArray(lb)) {
+        const cleaned = lb.filter((item) => !mockNames.includes(item.username.toLowerCase()));
+        localStorage.setItem("ceh_leaderboard", JSON.stringify(cleaned));
+      }
+    }
+    const rawUsers = localStorage.getItem("ceh_users");
+    if (rawUsers) {
+      const users = JSON.parse(rawUsers);
+      let changed = false;
+      for (const k of Object.keys(users)) {
+        if (mockNames.includes(k.toLowerCase())) {
+          delete users[k];
+          changed = true;
+        }
+      }
+      if (changed) {
+        localStorage.setItem("ceh_users", JSON.stringify(users));
+      }
+    }
+  } catch (e) {}
+}
 
 function getStoredUsers() {
   const users = localStorage.getItem("ceh_users");
   if (users) {
-    try { return JSON.parse(users); } catch (e) {}
+    try {
+      const parsed = JSON.parse(users);
+      if (!parsed["admin"]) {
+        parsed["admin"] = { password: "Pa$$w0rd", role: "admin", score: 0, solved: [], conceptSolved: [] };
+      }
+      return parsed;
+    } catch (e) {}
   }
   return {
     "admin": { password: "Pa$$w0rd", role: "admin", score: 0, solved: [], conceptSolved: [] }
@@ -39,11 +62,17 @@ function saveStoredUsers(users) {
 }
 
 function getLeaderboard() {
+  const mockNames = ["ahmed_sec", "fahad_cyber", "sara_ethical", "khalid_net"];
   const lb = localStorage.getItem("ceh_leaderboard");
   if (lb) {
-    try { return JSON.parse(lb); } catch (e) {}
+    try {
+      const parsed = JSON.parse(lb);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item) => !mockNames.includes(item.username.toLowerCase()));
+      }
+    } catch (e) {}
   }
-  return [...DEFAULT_LEADERBOARD];
+  return [];
 }
 
 function saveLeaderboard(lb) {
@@ -157,7 +186,7 @@ function loadQuestion(idx) {
   elPointsPill.innerText = `+${q.points || 100} PTS`;
 
   // Tutor Notes
-  if (currentUser.role === "admin") {
+  if (currentUser && currentUser.role === "admin") {
     elTutorBox.style.display = "block";
     elTutorNotesText.innerText = q.tutorNotes || "Demonstrate command syntax and review output details with students.";
   } else {
@@ -165,7 +194,7 @@ function loadQuestion(idx) {
   }
 
   // Concept Card
-  const isSolved = currentUser.solved.includes(q.id);
+  const isSolved = currentUser ? currentUser.solved.includes(q.id) : false;
   if (isSolved) {
     showGuidance("success", `<strong>Challenge Solved!</strong> You've successfully executed this command.`);
     renderConceptQuestion(q, true);
@@ -204,7 +233,7 @@ function renderQuestionGrid() {
       return;
     }
 
-    const isSolved = currentUser.solved.includes(q.id);
+    const isSolved = currentUser ? currentUser.solved.includes(q.id) : false;
     const badge = document.createElement("div");
     badge.className = `q-badge ${idx === currentIndex ? "current" : ""} ${isSolved ? "completed" : ""}`;
     badge.innerText = q.id;
@@ -216,6 +245,26 @@ function renderQuestionGrid() {
 
 // Update User & Mode UI
 function updateAuthUI() {
+  const btnSignOut = document.getElementById("btnSignOut");
+
+  if (!currentUser) {
+    elUserDisplay.innerText = "Sign In";
+    elUserScore.innerText = "0 pts";
+    if (btnSignOut) btnSignOut.style.display = "none";
+    elRoleBadge.className = "role-badge student";
+    elRoleBadge.innerText = "Guest";
+    elModeBanner.className = "mode-banner student";
+    elModeBanner.innerHTML = `
+      <span><strong>🔒 Authentication Required</strong> — Please Sign In or Create a Practice Account to begin</span>
+      <span style="opacity: 0.85;">Target: 10.10.1.22 (Windows Server 2022)</span>
+    `;
+    updateProgress();
+    renderQuestionGrid();
+    loadQuestion(currentIndex);
+    return;
+  }
+
+  if (btnSignOut) btnSignOut.style.display = "inline-flex";
   elUserDisplay.innerText = currentUser.username;
   elUserScore.innerText = `${currentUser.score} pts`;
 
@@ -245,7 +294,7 @@ function updateAuthUI() {
 // Progress Bar
 function updateProgress() {
   const total = CEH_QUESTIONS.length;
-  const done = currentUser.solved.length;
+  const done = currentUser ? currentUser.solved.length : 0;
   const pct = Math.round((done / total) * 100);
   elProgressBarFill.style.width = `${pct}%`;
   elProgressText.innerText = `${done} / ${total} (${pct}%)`;
@@ -253,6 +302,11 @@ function updateProgress() {
 
 // Evaluate Command
 function evaluateCommand(userCmd) {
+  if (!currentUser) {
+    openAuthModal(true);
+    return;
+  }
+
   const q = CEH_QUESTIONS[currentIndex];
   const trimmed = userCmd.trim();
 
@@ -456,6 +510,10 @@ function renderConceptQuestion(q, wasAlreadyCompleted = false) {
 }
 
 function selectConceptAnswer(q, option, btnElement) {
+  if (!currentUser) {
+    openAuthModal(true);
+    return;
+  }
   const allBtns = elConceptOptions.querySelectorAll(".concept-opt-btn");
   
   if (option.correct) {
@@ -530,6 +588,10 @@ function prevQuestion() {
 
 // Hint & Solution (Strictly NO Copy/Paste - forces typing)
 function showHint() {
+  if (!currentUser) {
+    openAuthModal(true);
+    return;
+  }
   const q = CEH_QUESTIONS[currentIndex];
   if (currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
     currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 15;
@@ -538,6 +600,10 @@ function showHint() {
 }
 
 function showSolution() {
+  if (!currentUser) {
+    openAuthModal(true);
+    return;
+  }
   const q = CEH_QUESTIONS[currentIndex];
   if (currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
     currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 50;
@@ -590,6 +656,7 @@ function setModuleFilter(mod) {
 
 // User Persistence & Leaderboard Sync
 function saveCurrentUser() {
+  if (!currentUser) return;
   const users = getStoredUsers();
   users[currentUser.username] = {
     password: users[currentUser.username]?.password || "Pa$$w0rd",
@@ -603,7 +670,7 @@ function saveCurrentUser() {
 }
 
 function updateLeaderboardWithUser() {
-  if (currentUser.role === "admin") return;
+  if (!currentUser || currentUser.role === "admin") return;
 
   let lb = getLeaderboard();
   const existingIdx = lb.findIndex((entry) => entry.username.toLowerCase() === currentUser.username.toLowerCase());
@@ -626,11 +693,25 @@ function updateLeaderboardWithUser() {
 }
 
 // Modals
-function openAuthModal() {
-  document.getElementById("authModal").style.display = "flex";
+function openAuthModal(force = false) {
+  const modal = document.getElementById("authModal");
+  const closeBtn = document.getElementById("authModalClose");
+  if (closeBtn) {
+    closeBtn.style.display = (!currentUser || force) ? "none" : "block";
+  }
+  modal.style.display = "flex";
+  setTimeout(() => {
+    const isLogin = document.getElementById("formLogin").style.display !== "none";
+    const input = document.getElementById(isLogin ? "loginUsername" : "signupUsername");
+    if (input) input.focus();
+  }, 100);
 }
 
 function closeAuthModal() {
+  if (!currentUser) {
+    alert("Please sign in or create a practice username to enter the labs.");
+    return;
+  }
   document.getElementById("authModal").style.display = "none";
 }
 
@@ -645,11 +726,13 @@ function setAuthTab(tab) {
     tabSignup.classList.remove("active");
     formLogin.style.display = "flex";
     formSignup.style.display = "none";
+    document.getElementById("loginUsername").focus();
   } else {
     tabSignup.classList.add("active");
     tabLogin.classList.remove("active");
     formSignup.style.display = "flex";
     formLogin.style.display = "none";
+    document.getElementById("signupUsername").focus();
   }
 }
 
@@ -668,6 +751,7 @@ function handleLogin(e) {
       conceptSolved: users["admin"]?.conceptSolved || [],
       penalties: {}
     };
+    sessionStorage.setItem("ceh_current_user", "admin");
     closeAuthModal();
     updateAuthUI();
     return;
@@ -682,6 +766,7 @@ function handleLogin(e) {
       conceptSolved: users[u].conceptSolved || [],
       penalties: users[u].penalties || {}
     };
+    sessionStorage.setItem("ceh_current_user", u);
     closeAuthModal();
     updateAuthUI();
     return;
@@ -707,7 +792,7 @@ function handleSignup(e) {
 
   const users = getStoredUsers();
   if (users[u]) {
-    alert("Username already exists. Please choose another or login.");
+    alert("Username already exists. Please choose another username or log in.");
     return;
   }
 
@@ -729,11 +814,23 @@ function handleSignup(e) {
     conceptSolved: [],
     penalties: {}
   };
+  sessionStorage.setItem("ceh_current_user", u);
 
   updateLeaderboardWithUser();
   closeAuthModal();
   updateAuthUI();
-  alert(`Welcome, ${u}! You are now in Practice Lab Mode. Solve tasks and analysis questions to earn points!`);
+  alert(`Welcome, ${u}! Practice account created. Your scores will be tracked on the CTF leaderboard.`);
+}
+
+function handleSignOut() {
+  currentUser = null;
+  sessionStorage.removeItem("ceh_current_user");
+  document.getElementById("loginUsername").value = "";
+  document.getElementById("loginPassword").value = "";
+  document.getElementById("signupUsername").value = "";
+  document.getElementById("signupPassword").value = "";
+  updateAuthUI();
+  openAuthModal(true);
 }
 
 function openLeaderboard() {
@@ -741,27 +838,39 @@ function openLeaderboard() {
   lbBody.innerHTML = "";
   const lb = getLeaderboard();
 
-  lb.forEach((entry, idx) => {
-    const tr = document.createElement("tr");
-    if (entry.username.toLowerCase() === currentUser.username.toLowerCase()) {
-      tr.className = "user-row";
-    }
-
-    let rankBadge = "";
-    if (idx === 0) rankBadge = '<span class="rank-badge rank-1">🥇</span>';
-    else if (idx === 1) rankBadge = '<span class="rank-badge rank-2">🥈</span>';
-    else if (idx === 2) rankBadge = '<span class="rank-badge rank-3">🥉</span>';
-    else rankBadge = `<span class="rank-badge rank-other">#${idx + 1}</span>`;
-
-    tr.innerHTML = `
-      <td>${rankBadge}</td>
-      <td><strong>${escapeHtml(entry.username)}</strong> ${entry.username === currentUser.username ? '<span style="color:var(--accent-cyan); font-size:0.75rem;">(You)</span>' : ''}</td>
-      <td>${entry.solvedCount} / ${CEH_QUESTIONS.length}</td>
-      <td style="color:var(--accent-yellow); font-weight:700;">${entry.score} pts</td>
-      <td style="color:var(--text-muted); font-size:0.78rem;">${entry.lastActive}</td>
+  if (lb.length === 0) {
+    lbBody.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px 10px;">
+          <div style="font-size: 1.5rem; margin-bottom: 8px;">🎯</div>
+          <strong style="color: var(--text-main); font-size: 0.95rem;">Leaderboard is currently empty</strong><br>
+          <span style="font-size: 0.82rem;">Create a practice account and complete tasks to take the #1 spot!</span>
+        </td>
+      </tr>
     `;
-    lbBody.appendChild(tr);
-  });
+  } else {
+    lb.forEach((entry, idx) => {
+      const tr = document.createElement("tr");
+      if (currentUser && entry.username.toLowerCase() === currentUser.username.toLowerCase()) {
+        tr.className = "user-row";
+      }
+
+      let rankBadge = "";
+      if (idx === 0) rankBadge = '<span class="rank-badge rank-1">🥇</span>';
+      else if (idx === 1) rankBadge = '<span class="rank-badge rank-2">🥈</span>';
+      else if (idx === 2) rankBadge = '<span class="rank-badge rank-3">🥉</span>';
+      else rankBadge = `<span class="rank-badge rank-other">#${idx + 1}</span>`;
+
+      tr.innerHTML = `
+        <td>${rankBadge}</td>
+        <td><strong>${escapeHtml(entry.username)}</strong> ${currentUser && entry.username === currentUser.username ? '<span style="color:var(--accent-cyan); font-size:0.75rem;">(You)</span>' : ''}</td>
+        <td>${entry.solvedCount} / ${CEH_QUESTIONS.length}</td>
+        <td style="color:var(--accent-yellow); font-weight:700;">${entry.score} pts</td>
+        <td style="color:var(--text-muted); font-size:0.78rem;">${entry.lastActive}</td>
+      `;
+      lbBody.appendChild(tr);
+    });
+  }
 
   document.getElementById("leaderboardModal").style.display = "flex";
 }
@@ -779,6 +888,7 @@ function closeCheatSheet() {
 }
 
 function resetProgress() {
+  if (!currentUser) return;
   if (confirm(`Reset all solved tasks and score for ${currentUser.username}?`)) {
     currentUser.solved = [];
     currentUser.conceptSolved = [];
@@ -872,14 +982,19 @@ document.querySelector(".terminal-pane").addEventListener("click", () => {
 window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeCheatSheet();
-    closeAuthModal();
     closeLeaderboard();
+    if (currentUser) {
+      closeAuthModal();
+    }
   }
 });
 
 ["cheatModal", "authModal", "leaderboardModal"].forEach((id) => {
   document.getElementById(id).addEventListener("click", (e) => {
     if (e.target.id === id) {
+      if (id === "authModal" && !currentUser) {
+        return; // Prevent dismissing without login/signup
+      }
       document.getElementById(id).style.display = "none";
     }
   });
@@ -887,20 +1002,30 @@ window.addEventListener("keydown", (e) => {
 
 // Initialize on Load
 window.addEventListener("DOMContentLoaded", () => {
+  cleanMockData();
+
   const users = getStoredUsers();
   if (!users["admin"]) {
     users["admin"] = { password: "Pa$$w0rd", role: "admin", score: 0, solved: [], conceptSolved: [] };
     saveStoredUsers(users);
   }
 
-  currentUser = {
-    username: "admin",
-    role: "admin",
-    score: users["admin"]?.score || 0,
-    solved: users["admin"]?.solved || [],
-    conceptSolved: users["admin"]?.conceptSolved || [],
-    penalties: {}
-  };
-
-  updateAuthUI();
+  // Check if an authenticated user session is active
+  const activeUser = sessionStorage.getItem("ceh_current_user");
+  if (activeUser && users[activeUser]) {
+    currentUser = {
+      username: activeUser,
+      role: users[activeUser].role || (activeUser.toLowerCase() === "admin" ? "admin" : "student"),
+      score: users[activeUser].score || 0,
+      solved: users[activeUser].solved || [],
+      conceptSolved: users[activeUser].conceptSolved || [],
+      penalties: users[activeUser].penalties || {}
+    };
+    updateAuthUI();
+  } else {
+    // Show login / signup modal FIRST when opening the lab!
+    currentUser = null;
+    updateAuthUI();
+    openAuthModal(true);
+  }
 });
