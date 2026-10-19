@@ -2480,6 +2480,10 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("DOMContentLoaded", async () => {
   cleanMockData();
 
+  // Immediately render question grid and load Task 1 so manual is never empty
+  renderQuestionGrid();
+  loadQuestion(0);
+
   const users = getStoredUsers();
   if (!users["admin"]) {
     users["admin"] = { password: "Pa$$w0rd", role: "admin", score: 0, solved: [], conceptSolved: [] };

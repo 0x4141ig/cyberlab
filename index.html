@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CEH v13 Interactive Lab Walkthrough (Modules 1 - 5) | NetAcad & CTF</title>
-  <link rel="stylesheet" href="style.css?v=20261019_v3">
+  <link rel="stylesheet" href="style.css?v=20261019_v4">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap" rel="stylesheet">
@@ -116,7 +116,7 @@
           <span class="points-pill" id="pointsPill">+100 PTS</span>
         </div>
 
-        <h2 class="task-title" id="taskTitle">Task Title</h2>
+        <h2 class="task-title" id="taskTitle">Task 1: Host Reachability & ICMP Verification</h2>
 
         <div class="target-badge" id="targetBadge">
           <strong>Target:</strong> 10.10.1.22
@@ -142,13 +142,13 @@
 
         <div>
           <div class="section-label">Scenario & Context</div>
-          <div class="scenario-card" id="scenarioText">Scenario description...</div>
+          <div class="scenario-card" id="scenarioText">Before conducting any active footprinting, reconnaissance, or vulnerability scanning, ethical hackers must verify target reachability and determine if ICMP traffic is filtered.</div>
         </div>
 
         <div>
           <div class="section-label">Lab Objectives & Details</div>
           <div class="task-card">
-            <span class="task-text" id="taskText">Task instructions...</span>
+            <span class="task-text" id="taskText">Send 4 ICMP echo request packets to target 10.10.1.22 using ping to verify connectivity and measure latency.</span>
           </div>
         </div>
 
@@ -185,7 +185,7 @@
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
               CEH v13 Exam Key Takeaway
             </div>
-            <div id="examTipText">Exam tips...</div>
+            <div id="examTipText">Exam Alert: In CEH v13, default ICMP Type 8 (Echo Request) and Type 0 (Echo Reply) are frequently filtered by stateful firewalls. When ping sweeps fail, pen testers pivot to TCP SYN/ACK or UDP discovery.</div>
           </div>
         </div>
 
@@ -601,7 +601,7 @@
     </div>
   </div>
 
-  <script src="questions.js?v=20261019_v3"></script>
-  <script src="app.js?v=20261019_v3"></script>
+  <script src="questions.js?v=20261019_v4"></script>
+  <script src="app.js?v=20261019_v4"></script>
 </body>
 </html>
