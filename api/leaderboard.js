@@ -14,19 +14,19 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const kvUrl = process.env.KV_REST_API_URL;
-  const kvToken = process.env.KV_REST_API_TOKEN;
+  const kvUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+  const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
-  // If Vercel KV is not connected yet, fall back gracefully
+  // If Redis is not connected yet, fall back gracefully
   if (!kvUrl || !kvToken) {
     if (req.method === 'GET') {
       return res.status(200).json({
-        status: 'kv_unlinked',
-        message: 'Vercel KV not yet connected in Storage tab. Showing local scores.',
+        status: 'redis_unlinked',
+        message: 'Upstash Redis not yet connected in Storage / Marketplace tab. Showing local scores.',
         leaderboard: []
       });
     }
-    return res.status(200).json({ status: 'kv_unlinked' });
+    return res.status(200).json({ status: 'redis_unlinked' });
   }
 
   try {
