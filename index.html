@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CEH v13 Interactive Lab Walkthrough (Modules 1 - 5) | NetAcad & CTF</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top Navigation Header -->
+  <header>
+    <div class="logo-badge">
+      <span class="badge-ceh">CEH v13</span>
+      <div class="header-title">
+        <h1>
+          Ethical Hacking Lab Platform
+          <span id="roleBadge" class="role-badge tutor">Tutor</span>
+        </h1>
+        <div class="header-subtitle">TM359 Tutorial Class • Modules 01 – 05 Practice & Education Sandbox</div>
+      </div>
+    </div>
+
+    <div class="header-actions">
+      <!-- User Profile & Switcher -->
+      <button class="user-profile-btn" onclick="openAuthModal()" title="Switch User / Login">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        <span id="userDisplay">admin</span>
+      </button>
+
+      <!-- Score Display -->
+      <div class="user-score-pill" title="Current CTF Points">
+        ⭐ <span id="userScore">0 pts</span>
+      </div>
+
+      <!-- Leaderboard Button -->
+      <button class="btn-header btn-leaderboard" onclick="openLeaderboard()">
+        🏆 Leaderboard
+      </button>
+
+      <!-- Overall Lab Progress -->
+      <div class="progress-container">
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progressBarFill"></div>
+        </div>
+        <span class="progress-text" id="progressText">0 / 28 (0%)</span>
+      </div>
+
+      <!-- Cheat Sheet & Clear -->
+      <button class="btn-header" onclick="openCheatSheet()" title="View Nmap & Port Reference">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
+        Reference
+      </button>
+      <button class="btn-header" onclick="clearTerminal()" title="Clear terminal output">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+        Clear
+      </button>
+      <button class="btn-header" onclick="resetProgress()" title="Reset progress for current user">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+        Reset
+      </button>
+    </div>
+  </header>
+
+  <!-- Dynamic Mode Banner (Tutor Education Mode vs Colleague CTF Practice Mode) -->
+  <div id="modeBanner" class="mode-banner tutor">
+    <span><strong>🎓 Tutor Education Lab Mode</strong> — Keystroke Tracker & Solutions Unlocked</span>
+    <span style="opacity: 0.85;">Target: 10.10.1.22 (Windows Server 2022)</span>
+  </div>
+
+  <!-- Module Filter Bar -->
+  <div class="module-filter-bar">
+    <button class="filter-chip active" data-module="all" onclick="setModuleFilter('all')">All Labs (28)</button>
+    <button class="filter-chip" data-module="1" onclick="setModuleFilter('1')">Mod 01: Intro to Ethical Hacking (2)</button>
+    <button class="filter-chip" data-module="2" onclick="setModuleFilter('2')">Mod 02: Footprinting & Recon (4)</button>
+    <button class="filter-chip" data-module="3" onclick="setModuleFilter('3')">Mod 03: Scanning Networks (10)</button>
+    <button class="filter-chip" data-module="4" onclick="setModuleFilter('4')">Mod 04: Enumeration & NetBIOS (9)</button>
+    <button class="filter-chip" data-module="5" onclick="setModuleFilter('5')">Mod 05: Vulnerability Analysis (3)</button>
+  </div>
+
+  <!-- Question Quick Select Grid -->
+  <div class="question-grid" id="questionGrid"></div>
+
+  <!-- Main Split Workspace -->
+  <main class="main-workspace">
+
+    <!-- Left Pane: NetAcad Lab Manual & Instructions -->
+    <section class="manual-pane">
+      <div class="question-pagination">
+        <button class="question-nav-btn" id="btnPrev" onclick="prevQuestion()">&larr; Previous Task</button>
+        <span class="question-indicator" id="questionIndicator">Task 1 of 28</span>
+        <button class="question-nav-btn" id="btnNext" onclick="nextQuestion()">Next Task &rarr;</button>
+      </div>
+
+      <div class="manual-content">
+        <div class="task-header-row">
+          <span class="module-tag" id="moduleTag">Module 01</span>
+          <span class="points-pill" id="pointsPill">+100 PTS</span>
+        </div>
+
+        <h2 class="task-title" id="taskTitle">Task Title</h2>
+
+        <div class="target-badge" id="targetBadge">
+          <strong>Target:</strong> 10.10.1.22
+        </div>
+
+        <div>
+          <div class="section-label">Scenario & Context</div>
+          <div class="scenario-card" id="scenarioText">Scenario description...</div>
+        </div>
+
+        <div>
+          <div class="section-label">Instruction / Required Command</div>
+          <div class="task-card">
+            <span class="task-text" id="taskText">Task instructions...</span>
+          </div>
+        </div>
+
+        <!-- Dynamic Feedback / Guidance Box (Anti-copy protected) -->
+        <div id="guidanceBox" class="guidance-box no-copy"></div>
+
+        <!-- Concept & Purpose Analysis Question Card (Appears after executing command) -->
+        <div id="conceptCard" class="concept-card">
+          <div class="concept-header-bar">
+            <span class="concept-badge">🧠 CEH Concept Analysis</span>
+            <span style="font-size:0.75rem; color:var(--accent-yellow); font-weight:700;">+25 Bonus Points</span>
+          </div>
+          <div id="conceptPrompt" class="concept-prompt-text">What is the significance of this output?</div>
+          <div id="conceptOptions" class="concept-options-grid"></div>
+          <div id="conceptFeedback" class="concept-explanation-box"></div>
+          <button class="btn-clue" onclick="revealCliHighlight()">
+            🔍 Highlight Evidence in Terminal
+          </button>
+        </div>
+
+        <!-- Tutor Teaching Points (Visible ONLY when logged in as admin) -->
+        <div id="tutorBox" class="tutor-box">
+          <div class="tutor-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+            👨‍🏫 Tutor Teaching Guide & Class Talking Points
+          </div>
+          <div id="tutorNotesText">Tutor teaching guidelines...</div>
+        </div>
+
+        <!-- CEH v13 Exam Tip Box -->
+        <div>
+          <div class="exam-tip-box">
+            <div class="exam-tip-header">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+              CEH v13 Exam Key Takeaway
+            </div>
+            <div id="examTipText">Exam tips...</div>
+          </div>
+        </div>
+
+        <!-- Action Buttons (No Paste Button to ensure manual typing) -->
+        <div class="manual-actions">
+          <button class="btn-secondary" onclick="showHint()">
+            💡 Need a Hint?
+          </button>
+          <button class="btn-secondary reveal" onclick="showSolution()">
+            🔑 Reveal Solution
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right Pane: Interactive Terminal Simulator -->
+    <section class="terminal-pane">
+      <div class="terminal-header">
+        <div class="terminal-dots">
+          <div class="dot red"></div>
+          <div class="dot yellow"></div>
+          <div class="dot green"></div>
+        </div>
+        <div class="terminal-tab-title">root@parrot: ~ (bash / zsh)</div>
+        <div class="terminal-tools">
+          <button id="btnTrackerToggle" class="btn-tracker-toggle" onclick="toggleTracker()" title="Toggle live keystroke typing guide" style="color: var(--text-muted);">
+            ⌨️ Guide: OFF
+          </button>
+          <span>CEH v13 Sandbox</span>
+        </div>
+      </div>
+
+      <!-- Terminal Output Body -->
+      <div class="terminal-body" id="terminalBody">
+        <div class="terminal-welcome">
+          === Parrot Security OS (CEH v13 Educational Sandbox) ===<br>
+          Target Environment: 10.10.1.0/24 subnet (Windows Server 2022 @ 10.10.1.22)<br>
+          Type the required command matching the instructions on the left pane and press [Enter].<br>
+          Use [Up] and [Down] arrow keys to recall previous commands.
+        </div>
+      </div>
+
+      <!-- Live Keystroke Highlight Tracking HUD Bar -->
+      <div id="cliTracker" class="cli-tracker-container">
+        <div class="tracker-header-row">
+          <span class="tracker-badge">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="16" rx="2"></rect><line x1="6" y1="8" x2="6.01" y2="8"></line><line x1="10" y1="8" x2="10.01" y2="8"></line><line x1="14" y1="8" x2="14.01" y2="8"></line><line x1="18" y1="8" x2="18.01" y2="8"></line><line x1="6" y1="12" x2="6.01" y2="12"></line><line x1="18" y1="12" x2="18.01" y2="12"></line><line x1="10" y1="16" x2="14" y2="16"></line></svg>
+            Live Command Keystroke Tracker
+          </span>
+          <span id="trackerMatchPct" class="tracker-pct">0 / 0 (0%)</span>
+        </div>
+        <div id="trackerDisplay" class="tracker-display no-copy"></div>
+        <div id="trackerTip" class="tracker-tip">Start typing to track your characters...</div>
+      </div>
+
+      <!-- Terminal Input Field (with Paste Warning Toast) -->
+      <div class="terminal-input-wrapper">
+        <div id="pasteToast" class="paste-warning-toast">
+          ⚠️ Copy-paste is disabled! Type manually to build CLI muscle memory.
+        </div>
+        <div class="terminal-input-row">
+          <span class="terminal-prompt" id="terminalPrompt">root@parrot:~#</span>
+          <input 
+            type="text" 
+            id="terminalInput" 
+            class="terminal-input" 
+            placeholder="Type command here (e.g. nmap -sS 10.10.1.22)..." 
+            autocomplete="off" 
+            autocorrect="off" 
+            autocapitalize="off" 
+            spellcheck="false" 
+          />
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Auth Modal: Sign In / Sign Up (Admin credentials completely hidden!) -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-card" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 style="font-size: 1.05rem; color: var(--accent-cyan);">User Login & Practice Registration</h3>
+        <button class="modal-close" onclick="closeAuthModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tabLogin" onclick="setAuthTab('login')">Sign In</button>
+          <button class="auth-tab" id="tabSignup" onclick="setAuthTab('signup')">Sign Up (Practice)</button>
+        </div>
+
+        <!-- Sign In Form -->
+        <form id="formLogin" class="auth-form" onsubmit="handleLogin(event)">
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" id="loginUsername" class="form-input" placeholder="Enter username..." required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn-primary">Sign In</button>
+        </form>
+
+        <!-- Sign Up Form (For Colleagues) -->
+        <form id="formSignup" class="auth-form" style="display: none;" onsubmit="handleSignup(event)">
+          <div class="form-group">
+            <label class="form-label">Choose Username</label>
+            <input type="text" id="signupUsername" class="form-input" placeholder="e.g. Colleague_Name" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Create Password</label>
+            <input type="password" id="signupPassword" class="form-input" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="btn-primary">Create Practice Account</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Leaderboard Modal (CTF Scoreboard) -->
+  <div class="modal-overlay" id="leaderboardModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; color: var(--accent-gold);">🏆 CEH v13 Practice Lab — CTF Leaderboard</h3>
+        <button class="modal-close" onclick="closeLeaderboard()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
+          Rankings are based on total challenge points and tasks solved. Solving tasks and answering concept checks earns maximum points.
+        </p>
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th style="width: 60px;">Rank</th>
+              <th>Student / Colleague</th>
+              <th>Solved</th>
+              <th>Score</th>
+              <th>Last Active</th>
+            </tr>
+          </thead>
+          <tbody id="leaderboardBody">
+            <!-- Dynamic rows rendered by app.js -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cheat Sheet Modal -->
+  <div class="modal-overlay" id="cheatModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 style="font-size: 1.1rem; color: var(--accent-cyan);">CEH v13 Quick Reference & Cheat Sheet</h3>
+        <button class="modal-close" onclick="closeCheatSheet()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <h4 style="color: var(--accent-green); margin-bottom: 8px;">Key Nmap Scanning Parameters</h4>
+        <table class="cheat-table">
+          <tr><th>Flag</th><th>Scan Type</th><th>Description</th></tr>
+          <tr><td><code>-sS</code></td><td>SYN Stealth Scan</td><td>Half-open scan; sends SYN, receives SYN/ACK, responds with RST. Default for root.</td></tr>
+          <tr><td><code>-sT</code></td><td>TCP Connect</td><td>Full 3-way handshake (SYN, SYN/ACK, ACK). Used when raw sockets unavailable.</td></tr>
+          <tr><td><code>-sU</code></td><td>UDP Scan</td><td>Scans UDP ports; no response = open|filtered; ICMP port unreachable = closed.</td></tr>
+          <tr><td><code>-sV</code></td><td>Version Detection</td><td>Interrogates open ports to determine exact application service & version.</td></tr>
+          <tr><td><code>-O</code></td><td>OS Detection</td><td>Analyzes TCP sequence predictability and window sizes for OS fingerprinting.</td></tr>
+          <tr><td><code>-A</code></td><td>Aggressive Scan</td><td>Enables -O, -sV, -sC (default scripts), and --traceroute simultaneously.</td></tr>
+          <tr><td><code>-f</code></td><td>Fragmentation</td><td>Splits IP packets into 8-byte fragments to evade simple packet inspection.</td></tr>
+          <tr><td><code>-D</code></td><td>Decoy Scan</td><td>Mixes scan packets with spoofed decoy IPs (e.g. -D RND:5).</td></tr>
+          <tr><td><code>-g / --source-port</code></td><td>Source Port Spoofing</td><td>Forces packets to originate from port 53 (DNS) or 80 (HTTP) to bypass firewall.</td></tr>
+        </table>
+
+        <h4 style="color: var(--accent-green); margin-top: 20px; margin-bottom: 8px;">Critical CEH Default Ports</h4>
+        <table class="cheat-table">
+          <tr><th>Port</th><th>Protocol</th><th>Service / Attack Vector</th></tr>
+          <tr><td><code>21</code></td><td>TCP</td><td>FTP (File Transfer, anonymous logins, cleartext)</td></tr>
+          <tr><td><code>22</code></td><td>TCP</td><td>SSH (Secure Shell)</td></tr>
+          <tr><td><code>23</code></td><td>TCP</td><td>Telnet (Unencrypted remote administration)</td></tr>
+          <tr><td><code>25</code></td><td>TCP</td><td>SMTP (Mail transfer; VRFY and EXPN user enumeration)</td></tr>
+          <tr><td><code>53</code></td><td>UDP/TCP</td><td>DNS (Queries: UDP 53, Zone Transfers [AXFR]: TCP 53)</td></tr>
+          <tr><td><code>80 / 443</code></td><td>TCP</td><td>HTTP / HTTPS (Web applications)</td></tr>
+          <tr><td><code>135</code></td><td>TCP</td><td>Microsoft RPC Endpoint Mapper</td></tr>
+          <tr><td><code>139 / 445</code></td><td>TCP</td><td>NetBIOS-SSN / SMB (File sharing, EternalBlue MS17-010)</td></tr>
+          <tr><td><code>161 / 162</code></td><td>UDP</td><td>SNMP (Simple Network Management; community strings)</td></tr>
+          <tr><td><code>389 / 636</code></td><td>TCP</td><td>LDAP / LDAPS (Active Directory directory services)</td></tr>
+          <tr><td><code>3389</code></td><td>TCP</td><td>RDP (Remote Desktop Protocol; BlueKeep CVE-2019-0708)</td></tr>
+        </table>
+
+        <h4 style="color: var(--accent-green); margin-top: 20px; margin-bottom: 8px;">NetBIOS Name Suffixes (16th Hex Byte)</h4>
+        <table class="cheat-table">
+          <tr><th>Suffix</th><th>Type</th><th>Service / Meaning in CEH</th></tr>
+          <tr><td><code>&lt;00&gt;</code></td><td>UNIQUE</td><td>Workstation Service (Computer Name / NetBIOS Hostname)</td></tr>
+          <tr><td><code>&lt;00&gt;</code></td><td>GROUP</td><td>Domain or Workgroup Name</td></tr>
+          <tr><td><code>&lt;03&gt;</code></td><td>UNIQUE</td><td>Messenger Service (Logged-in User / Broadcast Messenger)</td></tr>
+          <tr><td><code>&lt;1B&gt;</code></td><td>UNIQUE</td><td>Domain Master Browser (Tracks resources across subnets)</td></tr>
+          <tr><td><code>&lt;1C&gt;</code></td><td>GROUP</td><td>Domain Controller (Authenticates domain logons)</td></tr>
+          <tr><td><code>&lt;1D&gt;</code></td><td>UNIQUE</td><td>Master Browser (Subnet master browser server)</td></tr>
+          <tr><td><code>&lt;1E&gt;</code></td><td>GROUP</td><td>Browser Service Elections (Coordinates master browser elections)</td></tr>
+          <tr><td><code>&lt;20&gt;</code></td><td>UNIQUE</td><td>Server Service (File and Printer Sharing enabled — primary SMB target)</td></tr>
+        </table>
+
+        <h4 style="color: var(--accent-green); margin-top: 20px; margin-bottom: 8px;">Windows nbtstat Utility Reference</h4>
+        <table class="cheat-table">
+          <tr><th>Command</th><th>Purpose & Exam Note</th></tr>
+          <tr><td><code>nbtstat -A &lt;IP&gt;</code></td><td>Displays remote machine NetBIOS name table using <strong>IP address</strong> (capital -A).</td></tr>
+          <tr><td><code>nbtstat -a &lt;Name&gt;</code></td><td>Displays remote machine NetBIOS name table using <strong>Hostname</strong> (lowercase -a).</td></tr>
+          <tr><td><code>nbtstat -c</code></td><td>Dumps local <strong>NetBIOS Remote Name Cache</strong> (IP-to-NetBIOS name resolutions).</td></tr>
+          <tr><td><code>nbtstat -n</code></td><td>Lists <strong>Local NetBIOS Names</strong> registered by applications and services on host.</td></tr>
+          <tr><td><code>nbtstat -r</code></td><td>Displays names resolved via <strong>Broadcast</strong> vs. <strong>WINS Name Server</strong>.</td></tr>
+          <tr><td><code>nbtstat -R</code></td><td><strong>Purges and reloads</strong> the remote name cache table from LMHOSTS.</td></tr>
+          <tr><td><code>nbtstat -s</code> / <code>-S</code></td><td>Displays active <strong>NetBIOS Sessions</strong> table (client/server connection states).</td></tr>
+        </table>
+
+        <h4 style="color: var(--accent-green); margin-top: 20px; margin-bottom: 8px;">NetBT Ports vs Direct SMB</h4>
+        <table class="cheat-table">
+          <tr><th>Port</th><th>Protocol</th><th>Description</th></tr>
+          <tr><td><code>137</code></td><td>UDP</td><td>NetBIOS Name Service (NBNS) — WINS / name queries & registrations</td></tr>
+          <tr><td><code>138</code></td><td>UDP</td><td>NetBIOS Datagram Service — connectionless datagram traffic & browser announcements</td></tr>
+          <tr><td><code>139</code></td><td>TCP</td><td>NetBIOS Session Service — NetBT session layer (SMB over NetBIOS)</td></tr>
+          <tr><td><code>445</code></td><td>TCP</td><td>Direct-Hosted SMB — SMB natively over TCP/IP (without NetBT layer; MS17-010 target)</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
