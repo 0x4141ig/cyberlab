@@ -84,6 +84,7 @@ export default async function handler(req, res) {
     }
     return res.status(200).json({
       status: 'ok',
+      version: 'v2.1-clean',
       hasSupabaseUrl: Boolean(supabaseUrl),
       hasSupabaseKey: Boolean(supabaseKey),
       hasKv: Boolean(kvUrl && kvToken),
