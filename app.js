@@ -654,6 +654,351 @@ function setModuleFilter(mod) {
   renderQuestionGrid();
 }
 
+// ========================================================
+// Supabase Cloud Backend Configuration
+// ========================================================
+// You can enter your Supabase credentials here directly,
+// OR students and tutors can configure them via the "☁️ Cloud DB" button in the UI.
+const DEFAULT_SUPABASE_URL = ""; // e.g. "https://YOUR_PROJECT_ID.supabase.co"
+const DEFAULT_SUPABASE_KEY = ""; // e.g. "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+function getSupabaseConfig() {
+  const rawUrl = localStorage.getItem("ceh_supabase_url") || window.SUPABASE_URL || DEFAULT_SUPABASE_URL || "";
+  const rawKey = localStorage.getItem("ceh_supabase_key") || window.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_KEY || "";
+  const url = rawUrl.trim().replace(/\/+$/, "");
+  const anonKey = rawKey.trim();
+  return {
+    url,
+    anonKey,
+    isConfigured: Boolean(url && anonKey)
+  };
+}
+
+function getApiUrl() {
+  if (window.location.hostname.includes("vercel.app") || window.location.hostname === "localhost") {
+    return "/api/leaderboard";
+  }
+  return window.VERCEL_API_URL || "/api/leaderboard";
+}
+
+// --------------------------------------------------------
+// Cloud Connection & Status Verification
+// --------------------------------------------------------
+async function testSupabaseConnection(url, anonKey) {
+  if (!url || !anonKey) {
+    return { ok: false, message: "URL or Key is empty." };
+  }
+  const cleanUrl = url.trim().replace(/\/+$/, "");
+  const cleanKey = anonKey.trim();
+  try {
+    const res = await fetch(`${cleanUrl}/rest/v1/leaderboard?select=username&limit=1`, {
+      method: "GET",
+      headers: {
+        apikey: cleanKey,
+        Authorization: `Bearer ${cleanKey}`
+      }
+    });
+    if (res.ok) {
+      return { ok: true, message: "Connected successfully to Supabase!" };
+    }
+    const errText = await res.text();
+    return { ok: false, message: `Supabase returned HTTP ${res.status}: ${errText}` };
+  } catch (err) {
+    return { ok: false, message: `Network error: ${err.message}` };
+  }
+}
+
+async function updateCloudStatusIndicator() {
+  const config = getSupabaseConfig();
+  const banner = document.getElementById("cloudConnectionBanner");
+  const textEl = document.getElementById("cloudStatusText");
+  const dotEl = document.getElementById("cloudStatusDot");
+  const authNotice = document.getElementById("authCloudNoticeText");
+
+  if (!config.isConfigured) {
+    if (banner) {
+      banner.style.background = "rgba(255, 255, 255, 0.04)";
+      banner.style.borderColor = "var(--border-color)";
+    }
+    if (textEl) textEl.innerHTML = `<strong>Offline / Local Storage Mode</strong><br><span style="font-size:0.75rem; color:var(--text-muted);">Scores are saved only in this browser session.</span>`;
+    if (dotEl) dotEl.innerText = "⚪";
+    if (authNotice) authNotice.innerHTML = `💾 <strong>Local Storage Mode</strong> (Connect Supabase to share rankings)`;
+    return;
+  }
+
+  if (textEl) textEl.innerText = "Verifying Supabase connection...";
+  if (dotEl) dotEl.innerText = "🟡";
+
+  const result = await testSupabaseConnection(config.url, config.anonKey);
+  if (result.ok) {
+    if (banner) {
+      banner.style.background = "rgba(0, 230, 118, 0.1)";
+      banner.style.borderColor = "rgba(0, 230, 118, 0.4)";
+    }
+    if (textEl) textEl.innerHTML = `<strong style="color:var(--accent-green);">✓ Connected to Supabase Cloud</strong><br><span style="font-size:0.72rem; color:var(--text-muted);">${escapeHtml(config.url)}</span>`;
+    if (dotEl) dotEl.innerText = "🟢";
+    if (authNotice) authNotice.innerHTML = `🟢 <strong style="color:var(--accent-green);">Connected to Supabase</strong> (Multi-device sync active)`;
+  } else {
+    if (banner) {
+      banner.style.background = "rgba(255, 23, 68, 0.1)";
+      banner.style.borderColor = "rgba(255, 23, 68, 0.4)";
+    }
+    if (textEl) textEl.innerHTML = `<strong style="color:var(--accent-red);">Connection Failed</strong><br><span style="font-size:0.72rem; color:#ff80ab;">${escapeHtml(result.message)}</span>`;
+    if (dotEl) dotEl.innerText = "🔴";
+    if (authNotice) authNotice.innerHTML = `⚠️ <strong style="color:var(--accent-yellow);">Supabase Disconnected</strong> (Falling back to local)`;
+  }
+}
+
+// --------------------------------------------------------
+// Cloud Modal Open/Close & Configuration
+// --------------------------------------------------------
+function openCloudModal() {
+  const modal = document.getElementById("cloudModal");
+  if (!modal) return;
+  const config = getSupabaseConfig();
+  const inputUrl = document.getElementById("inputSupabaseUrl");
+  const inputKey = document.getElementById("inputSupabaseKey");
+  if (inputUrl) inputUrl.value = config.url;
+  if (inputKey) inputKey.value = config.anonKey;
+
+  modal.style.display = "flex";
+  updateCloudStatusIndicator();
+}
+
+function closeCloudModal() {
+  const modal = document.getElementById("cloudModal");
+  if (modal) modal.style.display = "none";
+}
+
+async function saveCloudConfig(e) {
+  if (e) e.preventDefault();
+  const inputUrl = document.getElementById("inputSupabaseUrl")?.value.trim() || "";
+  const inputKey = document.getElementById("inputSupabaseKey")?.value.trim() || "";
+
+  if (!inputUrl || !inputKey) {
+    alert("Please enter both the Supabase Project URL and Public Anon Key.");
+    return;
+  }
+
+  const cleanUrl = inputUrl.replace(/\/+$/, "");
+  const btn = e?.target?.querySelector("button[type='submit']");
+  if (btn) btn.innerText = "Testing Connection...";
+
+  const test = await testSupabaseConnection(cleanUrl, inputKey);
+  if (btn) btn.innerText = "💾 Save & Test Connection";
+
+  if (!test.ok) {
+    alert(`Connection check failed:\n${test.message}\n\nPlease verify your Supabase URL, anon key, and ensure you ran supabase_setup.sql.`);
+    return;
+  }
+
+  localStorage.setItem("ceh_supabase_url", cleanUrl);
+  localStorage.setItem("ceh_supabase_key", inputKey);
+
+  await updateCloudStatusIndicator();
+  await fetchCloudLeaderboard();
+
+  alert("✓ Successfully connected to Supabase Cloud!\nLeaderboard and user credentials are now synced across all devices.");
+  closeCloudModal();
+}
+
+function clearCloudConfig() {
+  if (confirm("Disconnect Supabase and switch back to local browser storage?")) {
+    localStorage.removeItem("ceh_supabase_url");
+    localStorage.removeItem("ceh_supabase_key");
+    const inputUrl = document.getElementById("inputSupabaseUrl");
+    const inputKey = document.getElementById("inputSupabaseKey");
+    if (inputUrl) inputUrl.value = "";
+    if (inputKey) inputKey.value = "";
+    updateCloudStatusIndicator();
+    alert("Switched to offline local storage mode.");
+  }
+}
+
+// --------------------------------------------------------
+// Cloud User Credentials & Progress Sync
+// --------------------------------------------------------
+async function cloudSignupUser(username, password) {
+  const config = getSupabaseConfig();
+  if (!config.isConfigured) return { ok: false, offline: true };
+
+  const cleanUser = username.trim();
+
+  // 1. Check if user already exists
+  try {
+    const checkRes = await fetch(
+      `${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(cleanUser)}&select=username`,
+      {
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`
+        }
+      }
+    );
+    if (checkRes.ok) {
+      const existing = await checkRes.json();
+      if (Array.isArray(existing) && existing.length > 0) {
+        return { ok: false, message: "Username already exists. Please choose a different username or sign in." };
+      }
+    }
+  } catch (e) {
+    console.warn("Cloud user existence check error:", e);
+  }
+
+  // 2. Insert into lab_users
+  try {
+    const nowIso = new Date().toISOString();
+    const insertUserRes = await fetch(`${config.url}/rest/v1/lab_users`, {
+      method: "POST",
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        "Content-Type": "application/json",
+        Prefer: "return=representation"
+      },
+      body: JSON.stringify({
+        username: cleanUser,
+        password: password,
+        role: "student",
+        score: 0,
+        solved: [],
+        concept_solved: [],
+        penalties: {},
+        created_at: nowIso,
+        updated_at: nowIso
+      })
+    });
+
+    if (!insertUserRes.ok) {
+      const errText = await insertUserRes.text();
+      return { ok: false, message: `Could not create account in Supabase: ${errText}` };
+    }
+
+    // 3. Insert initial row into leaderboard
+    await fetch(`${config.url}/rest/v1/leaderboard`, {
+      method: "POST",
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates"
+      },
+      body: JSON.stringify({
+        username: cleanUser,
+        score: 0,
+        solved_count: 0,
+        last_active: "Just now",
+        updated_at: nowIso
+      })
+    });
+
+    return { ok: true };
+  } catch (err) {
+    console.error("Cloud signup error:", err);
+    return { ok: false, message: `Network error creating account: ${err.message}` };
+  }
+}
+
+async function cloudLoginUser(username, password) {
+  const config = getSupabaseConfig();
+  if (!config.isConfigured) return { ok: false, offline: true };
+
+  const cleanUser = username.trim();
+
+  try {
+    const res = await fetch(
+      `${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(cleanUser)}&select=*`,
+      {
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`
+        }
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      return { ok: false, message: `Supabase login query error: ${errText}` };
+    }
+
+    const rows = await res.json();
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return { ok: false, notFound: true, message: "Account not found in cloud database." };
+    }
+
+    const userRow = rows[0];
+    if (userRow.password !== password) {
+      return { ok: false, wrongPassword: true, message: "Invalid password. Please check your credentials." };
+    }
+
+    return {
+      ok: true,
+      user: {
+        username: userRow.username,
+        role: userRow.role || "student",
+        score: Number(userRow.score) || 0,
+        solved: Array.isArray(userRow.solved) ? userRow.solved : [],
+        conceptSolved: Array.isArray(userRow.concept_solved) ? userRow.concept_solved : [],
+        penalties: (typeof userRow.penalties === "object" && userRow.penalties !== null) ? userRow.penalties : {}
+      }
+    };
+  } catch (err) {
+    console.warn("Cloud login network error:", err);
+    return { ok: false, offline: true, message: err.message };
+  }
+}
+
+async function cloudSaveUserProgress(user) {
+  if (!user || user.role === "admin") return;
+  const config = getSupabaseConfig();
+  if (!config.isConfigured) return;
+
+  const nowIso = new Date().toISOString();
+
+  // 1. Update lab_users table
+  try {
+    await fetch(`${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(user.username)}`, {
+      method: "PATCH",
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        score: user.score,
+        solved: user.solved,
+        concept_solved: user.conceptSolved || [],
+        penalties: user.penalties || {},
+        updated_at: nowIso
+      })
+    });
+  } catch (e) {
+    console.warn("Cloud progress save error (lab_users):", e);
+  }
+
+  // 2. Update leaderboard table
+  try {
+    await fetch(`${config.url}/rest/v1/leaderboard`, {
+      method: "POST",
+      headers: {
+        apikey: config.anonKey,
+        Authorization: `Bearer ${config.anonKey}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates"
+      },
+      body: JSON.stringify({
+        username: user.username,
+        score: user.score,
+        solved_count: user.solved.length,
+        last_active: "Just now",
+        updated_at: nowIso
+      })
+    });
+  } catch (e) {
+    console.warn("Cloud progress save error (leaderboard):", e);
+  }
+}
+
 // User Persistence & Leaderboard Sync
 function saveCurrentUser() {
   if (!currentUser) return;
@@ -667,33 +1012,24 @@ function saveCurrentUser() {
     penalties: currentUser.penalties
   };
   saveStoredUsers(users);
-}
 
-// Supabase Cloud Configuration
-// Can be set directly, via localStorage, or via window.SUPABASE_URL
-const SUPABASE_CONFIG = {
-  url: localStorage.getItem("ceh_supabase_url") || window.SUPABASE_URL || "",
-  anonKey: localStorage.getItem("ceh_supabase_key") || window.SUPABASE_ANON_KEY || ""
-};
-
-function getApiUrl() {
-  if (window.location.hostname.includes("vercel.app") || window.location.hostname === "localhost") {
-    return "/api/leaderboard";
-  }
-  return window.VERCEL_API_URL || "/api/leaderboard";
+  // Sync to Supabase in background
+  cloudSaveUserProgress(currentUser);
 }
 
 async function syncUserScoreToCloud() {
   if (!currentUser || currentUser.role === "admin") return;
 
+  const config = getSupabaseConfig();
+
   // 1. Direct Supabase REST API Sync
-  if (SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+  if (config.isConfigured) {
     try {
-      await fetch(`${SUPABASE_CONFIG.url}/rest/v1/leaderboard`, {
+      await fetch(`${config.url}/rest/v1/leaderboard`, {
         method: "POST",
         headers: {
-          apikey: SUPABASE_CONFIG.anonKey,
-          Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`,
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`,
           "Content-Type": "application/json",
           Prefer: "resolution=merge-duplicates"
         },
@@ -730,15 +1066,17 @@ async function syncUserScoreToCloud() {
 }
 
 async function fetchCloudLeaderboard() {
+  const config = getSupabaseConfig();
+
   // 1. Direct Supabase REST API Query
-  if (SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+  if (config.isConfigured) {
     try {
       const res = await fetch(
-        `${SUPABASE_CONFIG.url}/rest/v1/leaderboard?select=username,score,solved_count,last_active&order=score.desc,solved_count.desc`,
+        `${config.url}/rest/v1/leaderboard?select=username,score,solved_count,last_active&order=score.desc,solved_count.desc`,
         {
           headers: {
-            apikey: SUPABASE_CONFIG.anonKey,
-            Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`
+            apikey: config.anonKey,
+            Authorization: `Bearer ${config.anonKey}`
           }
         }
       );
@@ -798,7 +1136,7 @@ function updateLeaderboardWithUser() {
   lb.sort((a, b) => b.score - a.score || b.solvedCount - a.solvedCount);
   saveLeaderboard(lb);
 
-  // Sync to Vercel KV cloud in background
+  // Sync to Supabase & Vercel in background
   syncUserScoreToCloud();
 }
 
@@ -810,6 +1148,7 @@ function openAuthModal(force = false) {
     closeBtn.style.display = (!currentUser || force) ? "none" : "block";
   }
   modal.style.display = "flex";
+  updateCloudStatusIndicator();
   setTimeout(() => {
     const isLogin = document.getElementById("formLogin").style.display !== "none";
     const input = document.getElementById(isLogin ? "loginUsername" : "signupUsername");
@@ -846,13 +1185,19 @@ function setAuthTab(tab) {
   }
 }
 
-function handleLogin(e) {
+async function handleLogin(e) {
   e.preventDefault();
   const u = document.getElementById("loginUsername").value.trim();
   const p = document.getElementById("loginPassword").value;
 
-  const users = getStoredUsers();
+  if (!u || !p) {
+    alert("Please enter both username and password.");
+    return;
+  }
+
+  // 1. Tutor Admin login (always accessible)
   if (u.toLowerCase() === "admin" && p === "Pa$$w0rd") {
+    const users = getStoredUsers();
     currentUser = {
       username: "admin",
       role: "admin",
@@ -864,9 +1209,76 @@ function handleLogin(e) {
     sessionStorage.setItem("ceh_current_user", "admin");
     closeAuthModal();
     updateAuthUI();
+    renderQuestionGrid();
+    loadQuestion(currentIndex);
     return;
   }
 
+  // 2. Supabase Cloud Database Login
+  const config = getSupabaseConfig();
+  if (config.isConfigured) {
+    const submitBtn = document.querySelector("#formLogin button[type='submit']");
+    const origText = submitBtn ? submitBtn.innerText : "Sign In";
+    if (submitBtn) submitBtn.innerText = "Verifying...";
+
+    const cloudRes = await cloudLoginUser(u, p);
+    if (submitBtn) submitBtn.innerText = origText;
+
+    if (cloudRes.ok && cloudRes.user) {
+      currentUser = cloudRes.user;
+      sessionStorage.setItem("ceh_current_user", currentUser.username);
+
+      // Cache user locally
+      const users = getStoredUsers();
+      users[currentUser.username] = {
+        password: p,
+        role: currentUser.role,
+        score: currentUser.score,
+        solved: currentUser.solved,
+        conceptSolved: currentUser.conceptSolved,
+        penalties: currentUser.penalties
+      };
+      saveStoredUsers(users);
+
+      closeAuthModal();
+      updateAuthUI();
+      renderQuestionGrid();
+      loadQuestion(currentIndex);
+      alert(`Welcome back, ${currentUser.username}!\nCloud progress restored: ${currentUser.solved.length} tasks solved, ${currentUser.score} pts.`);
+      return;
+    }
+
+    if (cloudRes.wrongPassword) {
+      alert("Invalid password. Please check your credentials.");
+      return;
+    }
+
+    if (cloudRes.notFound) {
+      // Check local storage fallback
+      const localUsers = getStoredUsers();
+      if (localUsers[u] && localUsers[u].password === p) {
+        currentUser = {
+          username: u,
+          role: localUsers[u].role || "student",
+          score: localUsers[u].score || 0,
+          solved: localUsers[u].solved || [],
+          conceptSolved: localUsers[u].conceptSolved || [],
+          penalties: localUsers[u].penalties || {}
+        };
+        sessionStorage.setItem("ceh_current_user", u);
+        closeAuthModal();
+        updateAuthUI();
+        renderQuestionGrid();
+        loadQuestion(currentIndex);
+        return;
+      }
+      alert("Account not found. Please click 'Sign Up' to create your practice account.");
+      return;
+    }
+  }
+
+  // 3. Local Storage Fallback
+  const users = getStoredUsers();
   if (users[u] && users[u].password === p) {
     currentUser = {
       username: u,
@@ -879,13 +1291,15 @@ function handleLogin(e) {
     sessionStorage.setItem("ceh_current_user", u);
     closeAuthModal();
     updateAuthUI();
+    renderQuestionGrid();
+    loadQuestion(currentIndex);
     return;
   }
 
   alert("Invalid username or password.");
 }
 
-function handleSignup(e) {
+async function handleSignup(e) {
   e.preventDefault();
   const u = document.getElementById("signupUsername").value.trim();
   const p = document.getElementById("signupPassword").value;
@@ -900,12 +1314,24 @@ function handleSignup(e) {
     return;
   }
 
-  const users = getStoredUsers();
-  if (users[u]) {
-    alert("Username already exists. Please choose another username or log in.");
-    return;
+  // 1. Supabase Cloud Signup
+  const config = getSupabaseConfig();
+  if (config.isConfigured) {
+    const submitBtn = document.querySelector("#formSignup button[type='submit']");
+    const origText = submitBtn ? submitBtn.innerText : "Create Practice Account";
+    if (submitBtn) submitBtn.innerText = "Creating Account...";
+
+    const cloudRes = await cloudSignupUser(u, p);
+    if (submitBtn) submitBtn.innerText = origText;
+
+    if (!cloudRes.ok && !cloudRes.offline) {
+      alert(cloudRes.message || "Failed to create account in Supabase.");
+      return;
+    }
   }
 
+  // 2. Local Storage Cache
+  const users = getStoredUsers();
   users[u] = {
     password: p,
     role: "student",
@@ -929,7 +1355,9 @@ function handleSignup(e) {
   updateLeaderboardWithUser();
   closeAuthModal();
   updateAuthUI();
-  alert(`Welcome, ${u}! Practice account created. Your scores will be tracked on the CTF leaderboard.`);
+  renderQuestionGrid();
+  loadQuestion(currentIndex);
+  alert(`Welcome, ${u}! Practice account created.\nYour credentials and progress will synchronize across devices.`);
 }
 
 function handleSignOut() {
@@ -1102,21 +1530,25 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     closeCheatSheet();
     closeLeaderboard();
+    closeCloudModal();
     if (currentUser) {
       closeAuthModal();
     }
   }
 });
 
-["cheatModal", "authModal", "leaderboardModal"].forEach((id) => {
-  document.getElementById(id).addEventListener("click", (e) => {
-    if (e.target.id === id) {
-      if (id === "authModal" && !currentUser) {
-        return; // Prevent dismissing without login/signup
+["cheatModal", "authModal", "leaderboardModal", "cloudModal"].forEach((id) => {
+  const modalEl = document.getElementById(id);
+  if (modalEl) {
+    modalEl.addEventListener("click", (e) => {
+      if (e.target.id === id) {
+        if (id === "authModal" && !currentUser) {
+          return; // Prevent dismissing without login/signup
+        }
+        modalEl.style.display = "none";
       }
-      document.getElementById(id).style.display = "none";
-    }
-  });
+    });
+  }
 });
 
 // Initialize on Load
@@ -1128,6 +1560,10 @@ window.addEventListener("DOMContentLoaded", () => {
     users["admin"] = { password: "Pa$$w0rd", role: "admin", score: 0, solved: [], conceptSolved: [] };
     saveStoredUsers(users);
   }
+
+  // Pre-fetch cloud leaderboard and update cloud indicator
+  updateCloudStatusIndicator();
+  fetchCloudLeaderboard();
 
   // Check if an authenticated user session is active
   const activeUser = sessionStorage.getItem("ceh_current_user");
@@ -1141,6 +1577,8 @@ window.addEventListener("DOMContentLoaded", () => {
       penalties: users[activeUser].penalties || {}
     };
     updateAuthUI();
+    renderQuestionGrid();
+    loadQuestion(currentIndex);
   } else {
     // Show login / signup modal FIRST when opening the lab!
     currentUser = null;

@@ -46,6 +46,11 @@
         🏆 Leaderboard
       </button>
 
+      <!-- Cloud DB Sync Settings -->
+      <button class="btn-header" onclick="openCloudModal()" title="Connect Supabase Cloud Database & Leaderboard">
+        ☁️ Cloud DB
+      </button>
+
       <!-- Overall Lab Progress -->
       <div class="progress-container">
         <div class="progress-bar-bg">
@@ -251,6 +256,12 @@
           <button class="auth-tab" id="tabSignup" onclick="setAuthTab('signup')">Sign Up (Practice)</button>
         </div>
 
+        <!-- Cloud Sync Indicator in Auth Modal -->
+        <div id="authCloudNotice" style="margin-bottom: 12px; font-size: 0.74rem; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); color: var(--text-muted);">
+          <span id="authCloudNoticeText">Checking database connection...</span>
+          <button type="button" onclick="openCloudModal()" style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; text-decoration: underline; font-size: 0.74rem; padding: 0;">Setup Cloud</button>
+        </div>
+
         <!-- Sign In Form -->
         <form id="formLogin" class="auth-form" onsubmit="handleLogin(event)">
           <div class="form-group">
@@ -383,6 +394,59 @@
           <tr><td><code>139</code></td><td>TCP</td><td>NetBIOS Session Service — NetBT session layer (SMB over NetBIOS)</td></tr>
           <tr><td><code>445</code></td><td>TCP</td><td>Direct-Hosted SMB — SMB natively over TCP/IP (without NetBT layer; MS17-010 target)</td></tr>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Supabase Cloud DB Configuration Modal -->
+  <div class="modal-overlay" id="cloudModal">
+    <div class="modal-card" style="max-width: 500px;">
+      <div class="modal-header">
+        <h3 style="font-size: 1.05rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 8px;">
+          <span>☁️</span> Supabase Cloud Database Setup
+        </h3>
+        <button class="modal-close" onclick="closeCloudModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45;">
+          Connect your free <strong>Supabase</strong> project to enable real-time global CTF leaderboards and sync student logins/progress across any device.
+        </p>
+
+        <!-- Current Connection Status Pill -->
+        <div id="cloudConnectionBanner" style="margin-bottom: 14px; padding: 10px 14px; border-radius: 6px; font-size: 0.82rem; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color);">
+          <span id="cloudStatusText">Checking connection status...</span>
+          <span id="cloudStatusDot" style="font-size: 1rem;">⚪</span>
+        </div>
+
+        <form id="formCloudConfig" onsubmit="saveCloudConfig(event)" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="form-group">
+            <label class="form-label" style="display: flex; justify-content: space-between;">
+              <span>Supabase Project URL</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">e.g. https://xyz.supabase.co</span>
+            </label>
+            <input type="url" id="inputSupabaseUrl" class="form-input" placeholder="https://your-project-ref.supabase.co" autocomplete="off" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" style="display: flex; justify-content: space-between;">
+              <span>Supabase Public Anon Key</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">From Project Settings &gt; API</span>
+            </label>
+            <input type="password" id="inputSupabaseKey" class="form-input" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocomplete="off" />
+          </div>
+
+          <div style="display: flex; gap: 10px; margin-top: 6px;">
+            <button type="submit" class="btn-primary" style="flex: 2;">💾 Save &amp; Test Connection</button>
+            <button type="button" class="btn-header" onclick="clearCloudConfig()" style="flex: 1; padding: 9px;" title="Revert to local browser storage">Disconnect</button>
+          </div>
+        </form>
+
+        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-color); font-size: 0.78rem; color: var(--text-muted); line-height: 1.5;">
+          <strong style="color: var(--accent-yellow);">Quick Setup (1 minute):</strong><br>
+          1. Run the turnkey script <code style="color:var(--accent-cyan);">supabase_setup.sql</code> in your Supabase SQL Editor.<br>
+          2. Copy your <strong>Project URL</strong> and <strong>anon public key</strong> from <em>Project Settings &gt; API</em>.<br>
+          3. Paste them here and click <em>Save &amp; Test</em>!
+        </div>
       </div>
     </div>
   </div>

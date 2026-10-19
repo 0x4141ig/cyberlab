@@ -73,18 +73,49 @@ You can publish this app online so all your colleagues and students can access i
 
 ---
 
-## ▲ How to Deploy on Vercel (Global Shared Leaderboard)
+## ⚡ Supabase Setup (Shared CTF Leaderboard & User Accounts Sync)
 
-To enable a **shared real-time CTF leaderboard** across all student devices:
+To allow colleagues and students to register, log in from any phone or computer with their progress saved, and appear on a **shared real-time CTF Leaderboard**:
+
+### Step 1: Create a Free Supabase Project
+1. Go to **[supabase.com](https://supabase.com)** and create a free account (or log in with GitHub).
+2. Click **"New Project"**, name it `cyberlab`, set a database password, and choose your region.
+
+### Step 2: Run the 1-Click Database Setup Script
+1. In your Supabase Dashboard, click **SQL Editor** in the left sidebar.
+2. Click **"New Query"**.
+3. Open `supabase_setup.sql`, copy its entire content, paste it into the editor, and click **"Run"** (`Ctrl+Enter`).
+   - This automatically creates the `leaderboard` and `lab_users` tables with all necessary Row Level Security (RLS) policies.
+
+### Step 3: Get Your API Credentials
+1. In Supabase, navigate to **Project Settings** (gear icon at the bottom of the left sidebar) > **API**.
+2. Copy:
+   - **Project URL** (e.g. `https://xyzabcdefg.supabase.co`)
+   - **Project API Keys** &rarr; `anon` / `public` (e.g. `eyJhbGciOiJIUzI1NiIsInR5cCI6...`)
+
+### Step 4: Connect to CyberLab
+You can connect in either of two ways:
+- **Option A (Instant in Browser UI)**: Open your CyberLab site (`https://0x4141ig.github.io/cyberlab/`), click the **"☁️ Cloud DB"** button in the top navigation bar, paste your Project URL and Anon Key, and click **"Save & Test Connection"**.
+- **Option B (Permanent for All Students)**: Open `app.js` and paste your Project URL and Anon Key into:
+  ```javascript
+  const DEFAULT_SUPABASE_URL = "https://your-project-ref.supabase.co";
+  const DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6...";
+  ```
+  Then run `push.bat` to push to GitHub. All students visiting the link will automatically connect without needing any setup!
+
+---
+
+## ▲ How to Deploy on Vercel (Alternative Backend Option)
+
+If you prefer deploying via Vercel:
 
 1. Go to **[vercel.com](https://vercel.com)** and sign in with your GitHub account (`0x4141ig`).
 2. Click **"Add New..."** > **"Project"**.
 3. Select your repository: **`cyberlab`** and click **"Deploy"**.
-4. In your Vercel project dashboard, click the **"Storage"** tab:
-   - Click **"Create Database"** > Select **"KV"** (Redis).
-   - Name it `cyberlab-kv` and click **"Create"**.
-   - Click **"Connect to Project"** and select `cyberlab`.
-5. That's it! Vercel automatically powers the `/api/leaderboard` serverless API. All student scores will synchronize across all machines and phones in real time!
+4. In your Vercel project dashboard, go to **Settings** > **Environment Variables**:
+   - Add `SUPABASE_URL` = your Supabase Project URL.
+   - Add `SUPABASE_ANON_KEY` = your Supabase anon key.
+5. Alternatively, create an Upstash Redis database from Vercel's **Storage** tab.
 
 ---
 

@@ -1,5 +1,5 @@
 // Vercel Serverless Function: /api/leaderboard
-// Supports Supabase PostgreSQL Database & Upstash Redis
+// Supports Supabase PostgreSQL Database (Leaderboard + User Credentials) & Upstash Redis
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -19,20 +19,150 @@ export default async function handler(req, res) {
   const kvUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
+  const action = req.query?.action || '';
+
   // ==========================================
   // 1. SUPABASE DATABASE (Primary)
   // ==========================================
   if (supabaseUrl && supabaseKey) {
     try {
+      const cleanBaseUrl = supabaseUrl.replace(/\/+$/, '');
+      const headers = {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json'
+      };
+
+      // Action: User Login
+      if (req.method === 'POST' && action === 'login') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        const { username, password } = body || {};
+        if (!username || !password) {
+          return res.status(400).json({ error: 'Username and password required' });
+        }
+
+        const userRes = await fetch(
+          `${cleanBaseUrl}/rest/v1/lab_users?username=eq.${encodeURIComponent(username.trim())}&select=*`,
+          { headers }
+        );
+        const rows = await userRes.json();
+        if (!Array.isArray(rows) || rows.length === 0) {
+          return res.status(404).json({ error: 'Account not found' });
+        }
+
+        const row = rows[0];
+        if (row.password !== password) {
+          return res.status(401).json({ error: 'Invalid password' });
+        }
+
+        return res.status(200).json({
+          status: 'ok',
+          user: {
+            username: row.username,
+            role: row.role || 'student',
+            score: Number(row.score) || 0,
+            solved: Array.isArray(row.solved) ? row.solved : [],
+            conceptSolved: Array.isArray(row.concept_solved) ? row.concept_solved : [],
+            penalties: typeof row.penalties === 'object' && row.penalties !== null ? row.penalties : {}
+          }
+        });
+      }
+
+      // Action: User Signup
+      if (req.method === 'POST' && action === 'signup') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        const { username, password } = body || {};
+        if (!username || !password) {
+          return res.status(400).json({ error: 'Username and password required' });
+        }
+        if (username.toLowerCase() === 'admin') {
+          return res.status(400).json({ error: 'Username reserved' });
+        }
+
+        const cleanUser = username.trim();
+        const nowIso = new Date().toISOString();
+
+        // Insert into lab_users
+        const insertRes = await fetch(`${cleanBaseUrl}/rest/v1/lab_users`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            username: cleanUser,
+            password,
+            role: 'student',
+            score: 0,
+            solved: [],
+            concept_solved: [],
+            penalties: {},
+            created_at: nowIso,
+            updated_at: nowIso
+          })
+        });
+
+        if (!insertRes.ok) {
+          const errText = await insertRes.text();
+          return res.status(400).json({ error: errText });
+        }
+
+        // Insert into leaderboard
+        await fetch(`${cleanBaseUrl}/rest/v1/leaderboard`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+            username: cleanUser,
+            score: 0,
+            solved_count: 0,
+            last_active: 'Just now',
+            updated_at: nowIso
+          })
+        });
+
+        return res.status(200).json({ status: 'ok' });
+      }
+
+      // Action: Save Progress
+      if (req.method === 'POST' && action === 'save_progress') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+        const { username, score, solved, conceptSolved, penalties } = body || {};
+        if (!username) {
+          return res.status(400).json({ error: 'Username required' });
+        }
+
+        const cleanUser = username.trim();
+        const nowIso = new Date().toISOString();
+
+        await fetch(`${cleanBaseUrl}/rest/v1/lab_users?username=eq.${encodeURIComponent(cleanUser)}`, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({
+            score: Number(score) || 0,
+            solved: Array.isArray(solved) ? solved : [],
+            concept_solved: Array.isArray(conceptSolved) ? conceptSolved : [],
+            penalties: typeof penalties === 'object' && penalties !== null ? penalties : {},
+            updated_at: nowIso
+          })
+        });
+
+        await fetch(`${cleanBaseUrl}/rest/v1/leaderboard`, {
+          method: 'POST',
+          headers: { ...headers, Prefer: 'resolution=merge-duplicates' },
+          body: JSON.stringify({
+            username: cleanUser,
+            score: Number(score) || 0,
+            solved_count: Array.isArray(solved) ? solved.length : 0,
+            last_active: 'Just now',
+            updated_at: nowIso
+          })
+        });
+
+        return res.status(200).json({ status: 'ok' });
+      }
+
+      // Default GET: Fetch Leaderboard
       if (req.method === 'GET') {
         const response = await fetch(
-          `${supabaseUrl}/rest/v1/leaderboard?select=username,score,solved_count,last_active&order=score.desc,solved_count.desc`,
-          {
-            headers: {
-              apikey: supabaseKey,
-              Authorization: `Bearer ${supabaseKey}`
-            }
-          }
+          `${cleanBaseUrl}/rest/v1/leaderboard?select=username,score,solved_count,last_active&order=score.desc,solved_count.desc`,
+          { headers }
         );
 
         if (!response.ok) {
@@ -50,6 +180,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ status: 'ok', leaderboard: list });
       }
 
+      // Default POST: Upsert Leaderboard entry
       if (req.method === 'POST') {
         const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
         const { username, score, solvedCount, role } = body || {};
@@ -60,13 +191,10 @@ export default async function handler(req, res) {
 
         const cleanUsername = username.trim();
 
-        // Upsert into Supabase (merge on duplicate username)
-        const response = await fetch(`${supabaseUrl}/rest/v1/leaderboard`, {
+        const response = await fetch(`${cleanBaseUrl}/rest/v1/leaderboard`, {
           method: 'POST',
           headers: {
-            apikey: supabaseKey,
-            Authorization: `Bearer ${supabaseKey}`,
-            'Content-Type': 'application/json',
+            ...headers,
             Prefer: 'resolution=merge-duplicates'
           },
           body: JSON.stringify({
