@@ -246,6 +246,12 @@ function renderQuestionGrid() {
 // Update User & Mode UI
 function updateAuthUI() {
   const btnSignOut = document.getElementById("btnSignOut");
+  const btnCloud = document.getElementById("btnCloudSettings");
+  const authNotice = document.getElementById("authCloudNotice");
+  const isAdmin = currentUser && currentUser.role === "admin";
+
+  if (btnCloud) btnCloud.style.display = isAdmin ? "inline-flex" : "none";
+  if (authNotice) authNotice.style.display = isAdmin ? "flex" : "none";
 
   if (!currentUser) {
     elUserDisplay.innerText = "Sign In";
@@ -714,6 +720,12 @@ async function updateCloudStatusIndicator() {
   const textEl = document.getElementById("cloudStatusText");
   const dotEl = document.getElementById("cloudStatusDot");
   const authNotice = document.getElementById("authCloudNoticeText");
+  const authNoticeContainer = document.getElementById("authCloudNotice");
+  const isAdmin = currentUser && currentUser.role === "admin";
+
+  if (authNoticeContainer) {
+    authNoticeContainer.style.display = isAdmin ? "flex" : "none";
+  }
 
   if (!config.isConfigured) {
     if (banner) {
@@ -753,6 +765,10 @@ async function updateCloudStatusIndicator() {
 // Cloud Modal Open/Close & Configuration
 // --------------------------------------------------------
 function openCloudModal() {
+  if (!currentUser || currentUser.role !== "admin") {
+    alert("Cloud Database configuration is restricted to the Instructor/Tutor (Admin). Please log in as admin to configure.");
+    return;
+  }
   const modal = document.getElementById("cloudModal");
   if (!modal) return;
   const config = getSupabaseConfig();
@@ -1146,6 +1162,10 @@ function openAuthModal(force = false) {
   const closeBtn = document.getElementById("authModalClose");
   if (closeBtn) {
     closeBtn.style.display = (!currentUser || force) ? "none" : "block";
+  }
+  const authNotice = document.getElementById("authCloudNotice");
+  if (authNotice) {
+    authNotice.style.display = (currentUser && currentUser.role === "admin") ? "flex" : "none";
   }
   modal.style.display = "flex";
   updateCloudStatusIndicator();

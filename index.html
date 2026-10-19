@@ -46,8 +46,8 @@
         🏆 Leaderboard
       </button>
 
-      <!-- Cloud DB Sync Settings -->
-      <button class="btn-header" onclick="openCloudModal()" title="Connect Supabase Cloud Database & Leaderboard">
+      <!-- Cloud DB Sync Settings (Restricted to Admin/Tutor) -->
+      <button class="btn-header" id="btnCloudSettings" onclick="openCloudModal()" title="Connect Supabase Cloud Database & Leaderboard" style="display: none;">
         ☁️ Cloud DB
       </button>
 
@@ -256,8 +256,8 @@
           <button class="auth-tab" id="tabSignup" onclick="setAuthTab('signup')">Sign Up (Practice)</button>
         </div>
 
-        <!-- Cloud Sync Indicator in Auth Modal -->
-        <div id="authCloudNotice" style="margin-bottom: 12px; font-size: 0.74rem; padding: 6px 10px; border-radius: 6px; display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); color: var(--text-muted);">
+        <!-- Cloud Sync Indicator in Auth Modal (Restricted to Admin/Tutor) -->
+        <div id="authCloudNotice" style="display: none; margin-bottom: 12px; font-size: 0.74rem; padding: 6px 10px; border-radius: 6px; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); color: var(--text-muted);">
           <span id="authCloudNoticeText">Checking database connection...</span>
           <button type="button" onclick="openCloudModal()" style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; text-decoration: underline; font-size: 0.74rem; padding: 0;">Setup Cloud</button>
         </div>
