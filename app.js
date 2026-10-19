@@ -393,11 +393,6 @@ function updateProgress() {
 
 // Evaluate Command
 function evaluateCommand(userCmd) {
-  if (!currentUser) {
-    openAuthModal(true);
-    return;
-  }
-
   const q = CEH_QUESTIONS[currentIndex];
   const trimmed = userCmd.trim();
 
@@ -421,19 +416,21 @@ function evaluateCommand(userCmd) {
     playBeep(true);
     appendHighlightedOutput(q.output, q.highlightText);
 
-    const alreadySolved = currentUser.solved.includes(q.id);
-    if (!alreadySolved) {
-      currentUser.solved.push(q.id);
-      
-      const penalty = currentUser.penalties[q.id] || 0;
-      const earned = Math.max(20, (q.points || 100) - penalty);
-      currentUser.score += earned;
+    if (currentUser) {
+      const alreadySolved = currentUser.solved.includes(q.id);
+      if (!alreadySolved) {
+        currentUser.solved.push(q.id);
+        
+        const penalty = currentUser.penalties[q.id] || 0;
+        const earned = Math.max(20, (q.points || 100) - penalty);
+        currentUser.score += earned;
 
-      saveCurrentUser();
-      updateLeaderboardWithUser();
+        saveCurrentUser();
+        updateLeaderboardWithUser();
+      }
+
+      updateAuthUI();
     }
-
-    updateAuthUI();
 
     showGuidance(
       "success",
@@ -560,7 +557,7 @@ function appendHighlightedOutput(rawOutput, highlightStr) {
   resp.className = "terminal-response";
 
   if (highlightStr && rawOutput.includes(highlightStr)) {
-    const isTutor = currentUser.role === "admin";
+    const isTutor = currentUser && currentUser.role === "admin";
     const escapedHighlight = escapeHtml(highlightStr);
     const parts = rawOutput.split(highlightStr);
     const highlightedHtml = parts.map(p => escapeHtml(p)).join(
@@ -601,10 +598,6 @@ function renderConceptQuestion(q, wasAlreadyCompleted = false) {
 }
 
 function selectConceptAnswer(q, option, btnElement) {
-  if (!currentUser) {
-    openAuthModal(true);
-    return;
-  }
   const allBtns = elConceptOptions.querySelectorAll(".concept-opt-btn");
   
   if (option.correct) {
@@ -612,13 +605,15 @@ function selectConceptAnswer(q, option, btnElement) {
     allBtns.forEach(b => b.disabled = true);
     btnElement.classList.add("correct");
 
-    const conceptKey = `c_${q.id}`;
-    if (!currentUser.conceptSolved.includes(conceptKey)) {
-      currentUser.conceptSolved.push(conceptKey);
-      currentUser.score += 25;
-      saveCurrentUser();
-      updateLeaderboardWithUser();
-      elUserScore.innerText = `${currentUser.score} pts`;
+    if (currentUser) {
+      const conceptKey = `c_${q.id}`;
+      if (!currentUser.conceptSolved.includes(conceptKey)) {
+        currentUser.conceptSolved.push(conceptKey);
+        currentUser.score += 25;
+        saveCurrentUser();
+        updateLeaderboardWithUser();
+        elUserScore.innerText = `${currentUser.score} pts`;
+      }
     }
 
     revealCliHighlight();
@@ -679,25 +674,19 @@ function prevQuestion() {
 
 // Hint & Solution (Strictly NO Copy/Paste - forces typing)
 function showHint() {
-  if (!currentUser) {
-    openAuthModal(true);
-    return;
-  }
   const q = CEH_QUESTIONS[currentIndex];
-  if (currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
+  if (currentUser && currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
     currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 15;
+    saveCurrentUser();
   }
   showGuidance("hint", `<strong>💡 Instructor Hint:</strong> ${q.hint}`);
 }
 
 function showSolution() {
-  if (!currentUser) {
-    openAuthModal(true);
-    return;
-  }
   const q = CEH_QUESTIONS[currentIndex];
-  if (currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
+  if (currentUser && currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
     currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 50;
+    saveCurrentUser();
   }
   // Reveal Solution optionally activates the live keystroke tracker for assistance!
   setTrackerVisible(true);
@@ -1583,7 +1572,7 @@ function openAuthModal(force = false) {
   const modal = document.getElementById("authModal");
   const closeBtn = document.getElementById("authModalClose");
   if (closeBtn) {
-    closeBtn.style.display = (!currentUser || force) ? "none" : "block";
+    closeBtn.style.display = "block";
   }
   const authNotice = document.getElementById("authCloudNotice");
   if (authNotice) {
@@ -1599,11 +1588,10 @@ function openAuthModal(force = false) {
 }
 
 function closeAuthModal() {
-  if (!currentUser) {
-    alert("Please sign in or create a practice username to enter the labs.");
-    return;
+  const modal = document.getElementById("authModal");
+  if (modal) {
+    modal.style.display = "none";
   }
-  document.getElementById("authModal").style.display = "none";
 }
 
 function setAuthTab(tab) {
@@ -2467,9 +2455,6 @@ window.addEventListener("keydown", (e) => {
   if (modalEl) {
     modalEl.addEventListener("click", (e) => {
       if (e.target.id === id) {
-        if (id === "authModal" && !currentUser) {
-          return; // Prevent dismissing without login/signup
-        }
         modalEl.style.display = "none";
       }
     });
@@ -2525,9 +2510,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderQuestionGrid();
     loadQuestion(currentIndex);
   } else {
-    // Show login / signup modal FIRST when opening the lab!
     currentUser = null;
     updateAuthUI();
-    openAuthModal(true);
   }
 });
