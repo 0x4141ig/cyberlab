@@ -12,33 +12,9 @@ let currentUser = null;
 // Seed initial leaderboard (Empty by default for a fresh experience)
 const DEFAULT_LEADERBOARD = [];
 
-// Clean up any old mock test users from previous testing
+// Preserves all registered accounts
 function cleanMockData() {
-  const mockNames = ["ahmed_sec", "fahad_cyber", "sara_ethical", "khalid_net"];
-  try {
-    const rawLb = localStorage.getItem("ceh_leaderboard");
-    if (rawLb) {
-      const lb = JSON.parse(rawLb);
-      if (Array.isArray(lb)) {
-        const cleaned = lb.filter((item) => !mockNames.includes(item.username.toLowerCase()));
-        localStorage.setItem("ceh_leaderboard", JSON.stringify(cleaned));
-      }
-    }
-    const rawUsers = localStorage.getItem("ceh_users");
-    if (rawUsers) {
-      const users = JSON.parse(rawUsers);
-      let changed = false;
-      for (const k of Object.keys(users)) {
-        if (mockNames.includes(k.toLowerCase())) {
-          delete users[k];
-          changed = true;
-        }
-      }
-      if (changed) {
-        localStorage.setItem("ceh_users", JSON.stringify(users));
-      }
-    }
-  } catch (e) {}
+  // Keep all registered student data intact
 }
 
 function getStoredUsers() {
@@ -62,13 +38,12 @@ function saveStoredUsers(users) {
 }
 
 function getLeaderboard() {
-  const mockNames = ["ahmed_sec", "fahad_cyber", "sara_ethical", "khalid_net"];
   const lb = localStorage.getItem("ceh_leaderboard");
   if (lb) {
     try {
       const parsed = JSON.parse(lb);
       if (Array.isArray(parsed)) {
-        return parsed.filter((item) => !mockNames.includes(item.username.toLowerCase()));
+        return parsed;
       }
     } catch (e) {}
   }
@@ -185,6 +160,15 @@ function loadQuestion(idx) {
   elQuestionIndicator.innerText = `Task ${idx + 1} of ${CEH_QUESTIONS.length}`;
   elPointsPill.innerText = `+${q.points || 100} PTS`;
 
+  // Track active task for student
+  if (currentUser && currentUser.role !== "admin") {
+    currentUser.currentTaskId = q.id;
+    currentUser.currentTaskTitle = q.title;
+    currentUser.currentTaskModule = q.moduleTitle;
+    currentUser.lastActive = "Just now";
+    saveCurrentUser();
+  }
+
   // Tutor Notes
   if (currentUser && currentUser.role === "admin") {
     elTutorBox.style.display = "block";
@@ -247,10 +231,12 @@ function renderQuestionGrid() {
 function updateAuthUI() {
   const btnSignOut = document.getElementById("btnSignOut");
   const btnCloud = document.getElementById("btnCloudSettings");
+  const btnAdminPortal = document.getElementById("btnAdminPortal");
   const authNotice = document.getElementById("authCloudNotice");
   const isAdmin = currentUser && currentUser.role === "admin";
 
   if (btnCloud) btnCloud.style.display = isAdmin ? "inline-flex" : "none";
+  if (btnAdminPortal) btnAdminPortal.style.display = isAdmin ? "inline-flex" : "none";
   if (authNotice) authNotice.style.display = isAdmin ? "flex" : "none";
 
   if (!currentUser) {
@@ -276,11 +262,15 @@ function updateAuthUI() {
 
   if (currentUser.role === "admin") {
     elRoleBadge.className = "role-badge tutor";
-    elRoleBadge.innerText = "Tutor";
+    elRoleBadge.innerText = "Instructor Admin";
     elModeBanner.className = "mode-banner tutor";
     elModeBanner.innerHTML = `
-      <span><strong>🎓 Tutor Education Lab Mode</strong> — Teaching Points & Solutions Unlocked</span>
-      <span style="opacity: 0.85;">Target: 10.10.1.22 (Windows Server 2022)</span>
+      <div style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:8px;">
+        <span><strong>🎓 Instructor Admin Mode</strong> — Full Teaching Access &amp; Solutions Unlocked | Target: 10.10.1.22</span>
+        <button class="btn-header" onclick="openAdminPortal()" style="background:var(--accent-cyan); color:#0a0e17; font-weight:700; border:none; padding:4px 12px; font-size:0.75rem; border-radius:4px; cursor:pointer;">
+          🛡️ Open Admin Portal &amp; Live Matrix
+        </button>
+      </div>
     `;
   } else {
     elRoleBadge.className = "role-badge student";
@@ -680,7 +670,7 @@ function getSupabaseConfig() {
   };
 }
 
-const AUTO_CLOUD_DB_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a15404502d19ab";
+const AUTO_CLOUD_DB_BASE = "https://kvdb.io/duaHz7yFr98EAHvZku3Xz";
 
 function getApiUrl() {
   if (window.location.hostname.includes("vercel.app") || window.location.hostname === "localhost") {
@@ -693,38 +683,47 @@ function isCloudApiAvailable() {
   return true; // Live cloud database is pre-provisioned and active across all environments
 }
 
-async function fetchDirectAutoDb() {
+async function fetchDirectCloudUsers() {
   try {
-    const resp = await fetch(AUTO_CLOUD_DB_URL, {
-      headers: { "Accept": "application/json" }
-    });
-    if (!resp.ok) return { leaderboard: [], users: {} };
-    const json = await resp.json();
-    return json.data || { leaderboard: [], users: {} };
+    const resp = await fetch(`${AUTO_CLOUD_DB_BASE}/users`);
+    if (!resp.ok) return {};
+    return await resp.json();
   } catch (e) {
-    return { leaderboard: [], users: {} };
+    return {};
   }
 }
 
-async function patchDirectAutoDb(partialData) {
+async function saveDirectCloudUsers(users) {
   try {
-    const current = await fetchDirectAutoDb();
-    const merged = {
-      users: partialData.users !== undefined ? partialData.users : (current.users || {}),
-      leaderboard: partialData.leaderboard !== undefined ? partialData.leaderboard : (current.leaderboard || [])
-    };
-    await fetch(AUTO_CLOUD_DB_URL, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
-      body: JSON.stringify({ data: merged })
+    await fetch(`${AUTO_CLOUD_DB_BASE}/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(users)
     });
-    return merged;
   } catch (e) {
-    console.warn("Direct cloud DB patch error:", e);
-    return null;
+    console.warn("Direct cloud save users error:", e);
+  }
+}
+
+async function fetchDirectCloudLeaderboard() {
+  try {
+    const resp = await fetch(`${AUTO_CLOUD_DB_BASE}/leaderboard`);
+    if (!resp.ok) return [];
+    return await resp.json();
+  } catch (e) {
+    return [];
+  }
+}
+
+async function saveDirectCloudLeaderboard(lb) {
+  try {
+    await fetch(`${AUTO_CLOUD_DB_BASE}/leaderboard`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(lb)
+    });
+  } catch (e) {
+    console.warn("Direct cloud save leaderboard error:", e);
   }
 }
 
@@ -796,9 +795,9 @@ async function testSupabaseConnection(url, anonKey) {
     }
   } catch (e) {}
 
-  // Direct test of AUTO_CLOUD_DB_URL
+  // Direct test of AUTO_CLOUD_DB_BASE
   try {
-    const res = await fetch(AUTO_CLOUD_DB_URL, { headers: { "Accept": "application/json" } });
+    const res = await fetch(`${AUTO_CLOUD_DB_BASE}/leaderboard`);
     if (res.ok) {
       return { ok: true, message: "Connected to Shared Cloud DB (Direct Active)" };
     }
@@ -1021,10 +1020,9 @@ async function cloudSignupUser(username, password) {
     console.warn("Vercel API signup proxy error:", e);
   }
 
-  // 3. Direct Fallback to AUTO_CLOUD_DB_URL
+  // 3. Direct Fallback to KV Bucket
   try {
-    const db = await fetchDirectAutoDb();
-    const users = db.users || {};
+    const users = await fetchDirectCloudUsers();
     if (users[cleanUser]) {
       return { ok: false, message: "Username already exists. Please choose a different username or sign in." };
     }
@@ -1035,15 +1033,28 @@ async function cloudSignupUser(username, password) {
       solved: [],
       conceptSolved: [],
       penalties: {},
+      currentTaskId: 1,
+      currentTaskTitle: "Host Reachability & ICMP Verification",
+      currentTaskModule: "Module 01: Introduction to Ethical Hacking",
+      lastActive: "Just now",
       updatedAt: Date.now()
     };
-    const leaderboard = db.leaderboard || [];
+    await saveDirectCloudUsers(users);
+
+    const leaderboard = await fetchDirectCloudLeaderboard();
     const exIdx = leaderboard.findIndex(x => x.username.toLowerCase() === cleanUser.toLowerCase());
-    if (exIdx === -1) {
-      leaderboard.push({ username: cleanUser, score: 0, solvedCount: 0, lastActive: 'Just now' });
-    }
+    const entry = {
+      username: cleanUser,
+      score: 0,
+      solvedCount: 0,
+      currentTaskId: 1,
+      currentTaskTitle: "Host Reachability & ICMP Verification",
+      lastActive: 'Just now'
+    };
+    if (exIdx === -1) leaderboard.push(entry);
+    else leaderboard[exIdx] = entry;
     leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
-    await patchDirectAutoDb({ users, leaderboard });
+    await saveDirectCloudLeaderboard(leaderboard);
     saveLeaderboard(leaderboard);
     return { ok: true };
   } catch (err) {
@@ -1089,7 +1100,10 @@ async function cloudLoginUser(username, password) {
               score: Number(userRow.score) || 0,
               solved: Array.isArray(userRow.solved) ? userRow.solved : [],
               conceptSolved: Array.isArray(userRow.concept_solved) ? userRow.concept_solved : [],
-              penalties: (typeof userRow.penalties === "object" && userRow.penalties !== null) ? userRow.penalties : {}
+              penalties: (typeof userRow.penalties === "object" && userRow.penalties !== null) ? userRow.penalties : {},
+              currentTaskId: userRow.current_task_id || 1,
+              currentTaskTitle: userRow.current_task_title || "Host Reachability & ICMP Verification",
+              currentTaskModule: userRow.current_task_module || "Module 01: Introduction to Ethical Hacking"
             }
           };
         } else {
@@ -1123,10 +1137,9 @@ async function cloudLoginUser(username, password) {
     console.warn("Vercel API login proxy error:", e);
   }
 
-  // 3. Direct Fallback to AUTO_CLOUD_DB_URL
+  // 3. Direct Fallback to KV Bucket
   try {
-    const db = await fetchDirectAutoDb();
-    const users = db.users || {};
+    const users = await fetchDirectCloudUsers();
     const user = users[cleanUser];
     if (user) {
       if (user.password !== password) {
@@ -1140,7 +1153,10 @@ async function cloudLoginUser(username, password) {
           score: Number(user.score) || 0,
           solved: Array.isArray(user.solved) ? user.solved : [],
           conceptSolved: Array.isArray(user.conceptSolved) ? user.conceptSolved : [],
-          penalties: (typeof user.penalties === "object" && user.penalties !== null) ? user.penalties : {}
+          penalties: (typeof user.penalties === "object" && user.penalties !== null) ? user.penalties : {},
+          currentTaskId: user.currentTaskId || 1,
+          currentTaskTitle: user.currentTaskTitle || "Host Reachability & ICMP Verification",
+          currentTaskModule: user.currentTaskModule || "Module 01: Introduction to Ethical Hacking"
         }
       };
     }
@@ -1175,6 +1191,8 @@ async function cloudSaveUserProgress(user) {
           solved: user.solved,
           concept_solved: user.conceptSolved || [],
           penalties: user.penalties || {},
+          current_task_id: user.currentTaskId || 1,
+          current_task_title: user.currentTaskTitle || "Host Reachability & ICMP Verification",
           updated_at: nowIso
         })
       });
@@ -1197,7 +1215,10 @@ async function cloudSaveUserProgress(user) {
         score: user.score,
         solved: user.solved,
         conceptSolved: user.conceptSolved || [],
-        penalties: user.penalties || {}
+        penalties: user.penalties || {},
+        currentTaskId: user.currentTaskId || 1,
+        currentTaskTitle: user.currentTaskTitle || "Host Reachability & ICMP Verification",
+        currentTaskModule: user.currentTaskModule || "Module 01: Introduction to Ethical Hacking"
       })
     });
     if (res.ok) proxySaved = true;
@@ -1205,11 +1226,10 @@ async function cloudSaveUserProgress(user) {
     console.warn("Vercel API progress save error:", e);
   }
 
-  // 3. Direct Fallback to AUTO_CLOUD_DB_URL
+  // 3. Direct Fallback to KV Bucket
   if (!proxySaved && !config.isConfigured) {
     try {
-      const db = await fetchDirectAutoDb();
-      const users = db.users || {};
+      const users = await fetchDirectCloudUsers();
       users[user.username] = {
         password: users[user.username]?.password || 'Pa$$w0rd',
         role: 'student',
@@ -1217,20 +1237,28 @@ async function cloudSaveUserProgress(user) {
         solved: user.solved || [],
         conceptSolved: user.conceptSolved || [],
         penalties: user.penalties || {},
+        currentTaskId: user.currentTaskId || 1,
+        currentTaskTitle: user.currentTaskTitle || "Host Reachability & ICMP Verification",
+        currentTaskModule: user.currentTaskModule || "Module 01: Introduction to Ethical Hacking",
+        lastActive: 'Just now',
         updatedAt: Date.now()
       };
-      const leaderboard = db.leaderboard || [];
+      await saveDirectCloudUsers(users);
+
+      const leaderboard = await fetchDirectCloudLeaderboard();
       const exIdx = leaderboard.findIndex(x => x.username.toLowerCase() === user.username.toLowerCase());
       const entry = {
         username: user.username,
         score: Number(user.score) || 0,
         solvedCount: Array.isArray(user.solved) ? user.solved.length : 0,
+        currentTaskId: user.currentTaskId || 1,
+        currentTaskTitle: user.currentTaskTitle || "Host Reachability & ICMP Verification",
         lastActive: 'Just now'
       };
       if (exIdx !== -1) leaderboard[exIdx] = entry;
       else leaderboard.push(entry);
       leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
-      await patchDirectAutoDb({ users, leaderboard });
+      await saveDirectCloudLeaderboard(leaderboard);
       saveLeaderboard(leaderboard);
     } catch (err) {
       console.warn("Direct auto db progress save error:", err);
@@ -1248,11 +1276,15 @@ function saveCurrentUser() {
     score: currentUser.score,
     solved: currentUser.solved,
     conceptSolved: currentUser.conceptSolved || [],
-    penalties: currentUser.penalties
+    penalties: currentUser.penalties,
+    currentTaskId: currentUser.currentTaskId || 1,
+    currentTaskTitle: currentUser.currentTaskTitle || "Host Reachability & ICMP Verification",
+    currentTaskModule: currentUser.currentTaskModule || "Module 01: Introduction to Ethical Hacking",
+    lastActive: "Just now"
   };
   saveStoredUsers(users);
 
-  // Sync to Supabase in background
+  // Sync to Supabase & Cloud in background
   cloudSaveUserProgress(currentUser);
 }
 
@@ -1352,16 +1384,16 @@ async function fetchCloudLeaderboard() {
     // Proxy fallback to direct cloud DB
   }
 
-  // 3. Direct Fallback to AUTO_CLOUD_DB_URL
+  // 3. Direct Fallback to Shared KV Bucket
   try {
-    const db = await fetchDirectAutoDb();
-    if (db && Array.isArray(db.leaderboard) && db.leaderboard.length > 0) {
-      db.leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
-      saveLeaderboard(db.leaderboard);
-      return db.leaderboard;
+    const list = await fetchDirectCloudLeaderboard();
+    if (list && Array.isArray(list) && list.length > 0) {
+      list.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
+      saveLeaderboard(list);
+      return list;
     }
   } catch (e) {
-    console.warn("Direct auto db leaderboard fetch error:", e);
+    console.warn("Direct KV leaderboard fetch error:", e);
   }
 
   return getLeaderboard();
@@ -1373,9 +1405,8 @@ async function syncLocalUsersToCloud() {
   if (usernames.length === 0) return;
 
   try {
-    const db = await fetchDirectAutoDb();
-    const cloudUsers = db.users || {};
-    const leaderboard = db.leaderboard || [];
+    const cloudUsers = await fetchDirectCloudUsers();
+    const leaderboard = await fetchDirectCloudLeaderboard();
     let modified = false;
 
     for (const u of usernames) {
@@ -1388,6 +1419,10 @@ async function syncLocalUsersToCloud() {
           solved: localData.solved || [],
           conceptSolved: localData.conceptSolved || [],
           penalties: localData.penalties || {},
+          currentTaskId: localData.currentTaskId || 1,
+          currentTaskTitle: localData.currentTaskTitle || "Host Reachability & ICMP Verification",
+          currentTaskModule: localData.currentTaskModule || "Module 01: Introduction to Ethical Hacking",
+          lastActive: "Just now",
           updatedAt: Date.now()
         };
         const exIdx = leaderboard.findIndex(x => x.username.toLowerCase() === u.toLowerCase());
@@ -1395,6 +1430,8 @@ async function syncLocalUsersToCloud() {
           username: u,
           score: Number(localData.score) || 0,
           solvedCount: Array.isArray(localData.solved) ? localData.solved.length : 0,
+          currentTaskId: localData.currentTaskId || 1,
+          currentTaskTitle: localData.currentTaskTitle || "Host Reachability & ICMP Verification",
           lastActive: "Just now"
         };
         if (exIdx !== -1) leaderboard[exIdx] = entry;
@@ -1404,8 +1441,9 @@ async function syncLocalUsersToCloud() {
     }
 
     if (modified) {
+      await saveDirectCloudUsers(cloudUsers);
       leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
-      await patchDirectAutoDb({ users: cloudUsers, leaderboard });
+      await saveDirectCloudLeaderboard(leaderboard);
       saveLeaderboard(leaderboard);
     }
   } catch (e) {
@@ -1514,6 +1552,7 @@ async function handleLogin(e) {
     updateAuthUI();
     renderQuestionGrid();
     loadQuestion(currentIndex);
+    openAdminPortal(); // Auto-open instructor dashboard for admin!
     return;
   }
 
@@ -1538,15 +1577,23 @@ async function handleLogin(e) {
         score: currentUser.score,
         solved: currentUser.solved,
         conceptSolved: currentUser.conceptSolved,
-        penalties: currentUser.penalties
+        penalties: currentUser.penalties,
+        currentTaskId: currentUser.currentTaskId || 1,
+        currentTaskTitle: currentUser.currentTaskTitle || "Host Reachability & ICMP Verification",
+        currentTaskModule: currentUser.currentTaskModule || "Module 01: Introduction to Ethical Hacking",
+        lastActive: "Just now"
       };
       saveStoredUsers(users);
+
+      if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
+        currentIndex = currentUser.currentTaskId - 1;
+      }
 
       closeAuthModal();
       updateAuthUI();
       renderQuestionGrid();
       loadQuestion(currentIndex);
-      alert(`Welcome back, ${currentUser.username}!\nCloud progress restored: ${currentUser.solved.length} tasks solved, ${currentUser.score} pts.`);
+      alert(`Welcome back, ${currentUser.username}!\nCloud progress restored: ${currentUser.solved.length} tasks solved, ${currentUser.score} pts.\nResuming at Task ${currentIndex + 1}.`);
       return;
     }
 
@@ -1565,9 +1612,15 @@ async function handleLogin(e) {
           score: localUsers[u].score || 0,
           solved: localUsers[u].solved || [],
           conceptSolved: localUsers[u].conceptSolved || [],
-          penalties: localUsers[u].penalties || {}
+          penalties: localUsers[u].penalties || {},
+          currentTaskId: localUsers[u].currentTaskId || 1,
+          currentTaskTitle: localUsers[u].currentTaskTitle || "Host Reachability & ICMP Verification",
+          currentTaskModule: localUsers[u].currentTaskModule || "Module 01: Introduction to Ethical Hacking"
         };
         sessionStorage.setItem("ceh_current_user", u);
+        if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
+          currentIndex = currentUser.currentTaskId - 1;
+        }
         cloudSaveUserProgress(currentUser);
         syncUserScoreToCloud();
         closeAuthModal();
@@ -1590,9 +1643,15 @@ async function handleLogin(e) {
       score: users[u].score || 0,
       solved: users[u].solved || [],
       conceptSolved: users[u].conceptSolved || [],
-      penalties: users[u].penalties || {}
+      penalties: users[u].penalties || {},
+      currentTaskId: users[u].currentTaskId || 1,
+      currentTaskTitle: users[u].currentTaskTitle || "Host Reachability & ICMP Verification",
+      currentTaskModule: users[u].currentTaskModule || "Module 01: Introduction to Ethical Hacking"
     };
     sessionStorage.setItem("ceh_current_user", u);
+    if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
+      currentIndex = currentUser.currentTaskId - 1;
+    }
     cloudSaveUserProgress(currentUser);
     syncUserScoreToCloud();
     closeAuthModal();
@@ -1754,6 +1813,402 @@ function resetProgress() {
 }
 
 // ========================================================
+// Admin Portal & Live Student Monitoring Functions
+// ========================================================
+let adminCachedStudents = [];
+
+function openAdminPortal() {
+  if (!currentUser || currentUser.role !== "admin") {
+    alert("Instructor Admin access required.");
+    return;
+  }
+  const modal = document.getElementById("adminPortalModal");
+  if (modal) {
+    modal.style.display = "flex";
+    setAdminTab("roster");
+    refreshAdminPortal();
+  }
+}
+
+function closeAdminPortal() {
+  const modal = document.getElementById("adminPortalModal");
+  if (modal) modal.style.display = "none";
+}
+
+function setAdminTab(tab) {
+  const tabRoster = document.getElementById("tabAdminRoster");
+  const tabMatrix = document.getElementById("tabAdminMatrix");
+  const tabTools = document.getElementById("tabAdminTools");
+
+  const contentRoster = document.getElementById("adminTabContentRoster");
+  const contentMatrix = document.getElementById("adminTabContentMatrix");
+  const contentTools = document.getElementById("adminTabContentTools");
+
+  if (!tabRoster || !contentRoster) return;
+
+  [tabRoster, tabMatrix, tabTools].forEach(t => t && t.classList.remove("active"));
+  if (contentRoster) contentRoster.style.display = "none";
+  if (contentMatrix) contentMatrix.style.display = "none";
+  if (contentTools) contentTools.style.display = "none";
+
+  if (tab === "matrix") {
+    tabMatrix.classList.add("active");
+    contentMatrix.style.display = "block";
+    renderAdminMatrix(adminCachedStudents);
+  } else if (tab === "tools") {
+    tabTools.classList.add("active");
+    contentTools.style.display = "block";
+  } else {
+    tabRoster.classList.add("active");
+    contentRoster.style.display = "block";
+    renderAdminStudentTable(adminCachedStudents);
+  }
+}
+
+async function fetchAdminUsers() {
+  // 1. Try Vercel Serverless API
+  try {
+    const url = getApiUrl() + "?action=admin_users";
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.status === "ok" && Array.isArray(data.users)) {
+        return data.users;
+      }
+    }
+  } catch (e) {
+    console.warn("Vercel admin_users fetch error:", e);
+  }
+
+  // 2. Direct fallback to KV Bucket
+  try {
+    const rawUsers = await fetchDirectCloudUsers();
+    const students = [];
+    for (const [uname, u] of Object.entries(rawUsers)) {
+      if (uname.toLowerCase() === "admin") continue;
+      students.push({
+        username: uname,
+        role: u.role || "student",
+        score: Number(u.score) || 0,
+        solved: Array.isArray(u.solved) ? u.solved : [],
+        solvedCount: Array.isArray(u.solved) ? u.solved.length : 0,
+        conceptSolved: Array.isArray(u.conceptSolved) ? u.conceptSolved : [],
+        currentTaskId: u.currentTaskId || 1,
+        currentTaskTitle: u.currentTaskTitle || "Host Reachability & ICMP Verification",
+        currentTaskModule: u.currentTaskModule || "Module 01: Introduction to Ethical Hacking",
+        lastActive: u.lastActive || "Recently",
+        updatedAt: u.updatedAt || Date.now()
+      });
+    }
+
+    // Also include any users in local cache not in rawUsers
+    const localUsers = getStoredUsers();
+    for (const [uname, u] of Object.entries(localUsers)) {
+      if (uname.toLowerCase() === "admin") continue;
+      if (!students.find(s => s.username.toLowerCase() === uname.toLowerCase())) {
+        students.push({
+          username: uname,
+          role: u.role || "student",
+          score: Number(u.score) || 0,
+          solved: Array.isArray(u.solved) ? u.solved : [],
+          solvedCount: Array.isArray(u.solved) ? u.solved.length : 0,
+          conceptSolved: Array.isArray(u.conceptSolved) ? u.conceptSolved : [],
+          currentTaskId: u.currentTaskId || 1,
+          currentTaskTitle: u.currentTaskTitle || "Host Reachability & ICMP Verification",
+          currentTaskModule: u.currentTaskModule || "Module 01: Introduction to Ethical Hacking",
+          lastActive: u.lastActive || "Local device",
+          updatedAt: u.updatedAt || Date.now()
+        });
+      }
+    }
+
+    students.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
+    return students;
+  } catch (err) {
+    console.warn("Direct KV admin users fetch error:", err);
+  }
+
+  // 3. Fallback to Leaderboard
+  const lb = getLeaderboard();
+  return lb.map(entry => ({
+    username: entry.username,
+    role: "student",
+    score: entry.score || 0,
+    solved: [],
+    solvedCount: entry.solvedCount || 0,
+    currentTaskId: entry.currentTaskId || 1,
+    currentTaskTitle: entry.currentTaskTitle || "Host Reachability & ICMP Verification",
+    currentTaskModule: "Module 01: Introduction to Ethical Hacking",
+    lastActive: entry.lastActive || "Recently"
+  }));
+}
+
+async function refreshAdminPortal() {
+  const tableBody = document.getElementById("adminStudentTableBody");
+  if (tableBody && (!adminCachedStudents || adminCachedStudents.length === 0)) {
+    tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--text-muted);">🔄 Synchronizing student roster from cloud database...</td></tr>`;
+  }
+
+  const users = await fetchAdminUsers();
+  adminCachedStudents = (users || []).filter(u => u.username.toLowerCase() !== "admin");
+
+  // Calculate KPIs
+  const totalStudents = adminCachedStudents.length;
+  const totalSolved = adminCachedStudents.reduce((acc, s) => acc + (s.solvedCount || 0), 0);
+  const avgScore = totalStudents > 0 ? Math.round(adminCachedStudents.reduce((acc, s) => acc + (s.score || 0), 0) / totalStudents) : 0;
+  const topStudent = adminCachedStudents.length > 0 ? adminCachedStudents[0] : null;
+
+  const elTotalStudents = document.getElementById("adminStatTotalStudents");
+  const elTotalSolved = document.getElementById("adminStatTotalSolved");
+  const elAvgScore = document.getElementById("adminStatAvgScore");
+  const elTopStudent = document.getElementById("adminStatTopStudent");
+
+  if (elTotalStudents) elTotalStudents.innerText = totalStudents;
+  if (elTotalSolved) elTotalSolved.innerText = totalSolved;
+  if (elAvgScore) elAvgScore.innerText = `${avgScore} pts`;
+  if (elTopStudent) {
+    elTopStudent.innerText = topStudent ? `${topStudent.username} (${topStudent.score} pts)` : "-";
+  }
+
+  renderAdminStudentTable(adminCachedStudents);
+  renderAdminMatrix(adminCachedStudents);
+}
+
+function renderAdminStudentTable(students) {
+  const tbody = document.getElementById("adminStudentTableBody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  if (!students || students.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" style="text-align: center; padding: 30px; color: var(--text-muted);">
+          No registered students found in database.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  students.forEach((s, idx) => {
+    const tr = document.createElement("tr");
+    const taskId = s.currentTaskId || 1;
+    const taskTitle = s.currentTaskTitle || "Host Reachability & ICMP Verification";
+    const taskModule = s.currentTaskModule || "Module 01: Introduction to Ethical Hacking";
+    const solvedCount = s.solvedCount || (Array.isArray(s.solved) ? s.solved.length : 0);
+    const pct = Math.round((solvedCount / CEH_QUESTIONS.length) * 100);
+
+    tr.innerHTML = `
+      <td style="font-weight: 700; color: var(--text-muted);">${idx + 1}</td>
+      <td>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span class="student-avatar">${escapeHtml(s.username.substring(0, 2).toUpperCase())}</span>
+          <strong style="color: var(--text-main); font-size: 0.88rem;">${escapeHtml(s.username)}</strong>
+        </div>
+      </td>
+      <td>
+        <div class="admin-task-pill">
+          <span>📍</span>
+          <strong>Q${taskId}:</strong>
+          <span style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(taskTitle)}</span>
+        </div>
+        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 3px; padding-left: 2px;">
+          ${escapeHtml(taskModule)}
+        </div>
+      </td>
+      <td>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-weight: 600; font-size: 0.82rem;">${solvedCount} / ${CEH_QUESTIONS.length}</span>
+          <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; min-width: 50px;">
+            <div style="width: ${pct}%; height: 100%; background: var(--accent-green); border-radius: 3px;"></div>
+          </div>
+        </div>
+      </td>
+      <td style="color: var(--accent-yellow); font-weight: 700; font-size: 0.88rem;">${s.score || 0} pts</td>
+      <td style="color: var(--text-muted); font-size: 0.76rem;">${escapeHtml(s.lastActive || "Recently")}</td>
+      <td style="text-align: center;">
+        <button onclick="adminResetStudent('${escapeHtml(s.username)}')" class="btn-header" style="padding: 3px 8px; font-size: 0.72rem; color: var(--accent-red); border-color: rgba(255,82,82,0.3);" title="Reset progress for ${escapeHtml(s.username)}">
+          🔄 Reset
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function renderAdminMatrix(students) {
+  const headerTr = document.getElementById("adminMatrixHeader");
+  const matrixBody = document.getElementById("adminMatrixBody");
+  if (!headerTr || !matrixBody) return;
+
+  // Build header Q1..Q25
+  let hHtml = `<th style="position: sticky; left: 0; background: var(--bg-card); z-index: 2; min-width: 120px;">Student</th>`;
+  for (let q = 1; q <= CEH_QUESTIONS.length; q++) {
+    hHtml += `<th style="text-align: center; width: 28px; padding: 4px 2px;" title="Task ${q}: ${escapeHtml(CEH_QUESTIONS[q - 1]?.title || '')}">Q${q}</th>`;
+  }
+  hHtml += `<th style="text-align: center; width: 60px;">Total</th>`;
+  headerTr.innerHTML = hHtml;
+
+  // Build student rows
+  matrixBody.innerHTML = "";
+  if (!students || students.length === 0) {
+    matrixBody.innerHTML = `<tr><td colspan="${CEH_QUESTIONS.length + 2}" style="text-align:center; padding:20px; color:var(--text-muted);">No student data available.</td></tr>`;
+    return;
+  }
+
+  students.forEach(s => {
+    const tr = document.createElement("tr");
+    const solvedSet = new Set(Array.isArray(s.solved) ? s.solved : []);
+    const currentQ = Number(s.currentTaskId) || 1;
+
+    let rowHtml = `<td style="position: sticky; left: 0; background: var(--bg-card); z-index: 1; font-weight: 600;">${escapeHtml(s.username)}</td>`;
+    for (let q = 1; q <= CEH_QUESTIONS.length; q++) {
+      if (solvedSet.has(q)) {
+        rowHtml += `<td class="matrix-cell matrix-solved" title="Q${q}: Solved (Passed)">✓</td>`;
+      } else if (q === currentQ) {
+        rowHtml += `<td class="matrix-cell matrix-current" title="Q${q}: Active Current Task">📍</td>`;
+      } else {
+        rowHtml += `<td class="matrix-cell" style="color: var(--text-muted); opacity: 0.35;">·</td>`;
+      }
+    }
+    rowHtml += `<td style="text-align: center; font-weight: 700; color: var(--accent-cyan);">${solvedSet.size} / ${CEH_QUESTIONS.length}</td>`;
+    tr.innerHTML = rowHtml;
+    matrixBody.appendChild(tr);
+  });
+}
+
+function filterAdminStudents() {
+  const query = (document.getElementById("adminStudentSearch")?.value || "").toLowerCase().trim();
+  if (!query) {
+    renderAdminStudentTable(adminCachedStudents);
+    return;
+  }
+  const filtered = adminCachedStudents.filter(s => s.username.toLowerCase().includes(query));
+  renderAdminStudentTable(filtered);
+}
+
+function exportAdminCSV() {
+  if (!adminCachedStudents || adminCachedStudents.length === 0) {
+    alert("No student data available to export.");
+    return;
+  }
+
+  const headers = ["Username", "Role", "Current_Task_ID", "Current_Task_Title", "Tasks_Solved", "Total_Tasks", "Score", "Last_Active", "Updated_At"];
+  const rows = adminCachedStudents.map(s => [
+    `"${s.username.replace(/"/g, '""')}"`,
+    `"${(s.role || "student").replace(/"/g, '""')}"`,
+    s.currentTaskId || 1,
+    `"${(s.currentTaskTitle || "Host Reachability").replace(/"/g, '""')}"`,
+    s.solvedCount || 0,
+    CEH_QUESTIONS.length,
+    s.score || 0,
+    `"${(s.lastActive || "Recently").replace(/"/g, '""')}"`,
+    s.updatedAt ? new Date(s.updatedAt).toISOString() : new Date().toISOString()
+  ]);
+
+  const csvContent = [headers.join(","), ...rows.map(r => r.join(","))].join("\r\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `ceh_v13_student_progress_${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+async function handleAdminCreateUser(e) {
+  e.preventDefault();
+  const unameInput = document.getElementById("adminNewUsername");
+  const passInput = document.getElementById("adminNewPassword");
+  const uname = (unameInput?.value || "").trim();
+  const pass = (passInput?.value || "").trim() || "Pa$$w0rd";
+
+  if (!uname) {
+    alert("Please enter a username.");
+    return;
+  }
+
+  const res = await cloudSignupUser(uname, pass);
+  if (!res.ok && !res.offline) {
+    alert(res.message || "Failed to create account.");
+    return;
+  }
+
+  unameInput.value = "";
+  if (passInput) passInput.value = "";
+  alert(`Student account '${uname}' created successfully with password '${pass}'.`);
+  await refreshAdminPortal();
+  setAdminTab("roster");
+}
+
+async function adminResetStudent(username) {
+  if (!confirm(`Are you sure you want to reset all solved tasks and score for student '${username}'? This cannot be undone.`)) {
+    return;
+  }
+
+  // 1. Try Vercel Serverless API
+  try {
+    const url = getApiUrl() + "?action=admin_reset_user";
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username })
+    });
+  } catch (e) {
+    console.warn("Vercel admin_reset_user error:", e);
+  }
+
+  // 2. Direct fallback to KV Bucket
+  try {
+    const users = await fetchDirectCloudUsers();
+    if (users[username]) {
+      users[username].score = 0;
+      users[username].solved = [];
+      users[username].conceptSolved = [];
+      users[username].penalties = {};
+      users[username].currentTaskId = 1;
+      users[username].currentTaskTitle = "Host Reachability & ICMP Verification";
+      users[username].lastActive = "Reset by Admin";
+      users[username].updatedAt = Date.now();
+      await saveDirectCloudUsers(users);
+    }
+
+    const leaderboard = await fetchDirectCloudLeaderboard();
+    const exIdx = leaderboard.findIndex(x => x.username.toLowerCase() === username.toLowerCase());
+    if (exIdx !== -1) {
+      leaderboard[exIdx].score = 0;
+      leaderboard[exIdx].solvedCount = 0;
+      leaderboard[exIdx].currentTaskId = 1;
+      leaderboard[exIdx].currentTaskTitle = "Host Reachability & ICMP Verification";
+      leaderboard[exIdx].lastActive = "Reset by Admin";
+      leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
+      await saveDirectCloudLeaderboard(leaderboard);
+      saveLeaderboard(leaderboard);
+    }
+  } catch (err) {
+    console.warn("Direct KV reset error:", err);
+  }
+
+  // 3. Local Cache reset
+  const localUsers = getStoredUsers();
+  if (localUsers[username]) {
+    localUsers[username].score = 0;
+    localUsers[username].solved = [];
+    localUsers[username].conceptSolved = [];
+    localUsers[username].penalties = {};
+    localUsers[username].currentTaskId = 1;
+    localUsers[username].currentTaskTitle = "Host Reachability & ICMP Verification";
+    localUsers[username].lastActive = "Reset by Admin";
+    saveStoredUsers(localUsers);
+  }
+
+  alert(`Student '${username}' progress has been reset.`);
+  await refreshAdminPortal();
+}
+
+// ========================================================
 // ANTI-COPY & ANTI-PASTE EVENT LISTENERS
 // ========================================================
 
@@ -1837,13 +2292,14 @@ window.addEventListener("keydown", (e) => {
     closeCheatSheet();
     closeLeaderboard();
     closeCloudModal();
+    closeAdminPortal();
     if (currentUser) {
       closeAuthModal();
     }
   }
 });
 
-["cheatModal", "authModal", "leaderboardModal", "cloudModal"].forEach((id) => {
+["cheatModal", "authModal", "leaderboardModal", "cloudModal", "adminPortalModal"].forEach((id) => {
   const modalEl = document.getElementById(id);
   if (modalEl) {
     modalEl.addEventListener("click", (e) => {
@@ -1880,15 +2336,24 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Check if an authenticated user session is active
   const activeUser = sessionStorage.getItem("ceh_current_user");
-  if (activeUser && users[activeUser]) {
+  if (activeUser && (users[activeUser] || activeUser.toLowerCase() === "admin")) {
+    const userData = users[activeUser] || {};
     currentUser = {
       username: activeUser,
-      role: users[activeUser].role || (activeUser.toLowerCase() === "admin" ? "admin" : "student"),
-      score: users[activeUser].score || 0,
-      solved: users[activeUser].solved || [],
-      conceptSolved: users[activeUser].conceptSolved || [],
-      penalties: users[activeUser].penalties || {}
+      role: userData.role || (activeUser.toLowerCase() === "admin" ? "admin" : "student"),
+      score: userData.score || 0,
+      solved: userData.solved || [],
+      conceptSolved: userData.conceptSolved || [],
+      penalties: userData.penalties || {},
+      currentTaskId: userData.currentTaskId || 1,
+      currentTaskTitle: userData.currentTaskTitle || "Host Reachability & ICMP Verification",
+      currentTaskModule: userData.currentTaskModule || "Module 01: Introduction to Ethical Hacking"
     };
+
+    if (currentUser.role !== "admin" && currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
+      currentIndex = currentUser.currentTaskId - 1;
+    }
+
     updateAuthUI();
     renderQuestionGrid();
     loadQuestion(currentIndex);

@@ -46,8 +46,13 @@
         🏆 Leaderboard
       </button>
 
+      <!-- Admin & Student Tracker Portal (Restricted to Admin/Tutor) -->
+      <button class="btn-header admin-portal-btn" id="btnAdminPortal" onclick="openAdminPortal()" title="Instructor Class Dashboard &amp; Student Task Tracker" style="display: none; background: rgba(0, 229, 255, 0.15); border: 1px solid var(--accent-cyan); color: var(--accent-cyan); font-weight: 600;">
+        🛡️ Admin Portal
+      </button>
+
       <!-- Cloud DB Sync Settings (Restricted to Admin/Tutor) -->
-      <button class="btn-header" id="btnCloudSettings" onclick="openCloudModal()" title="Connect Supabase Cloud Database & Leaderboard" style="display: none;">
+      <button class="btn-header" id="btnCloudSettings" onclick="openCloudModal()" title="Connect Supabase Cloud Database &amp; Leaderboard" style="display: none;">
         ☁️ Cloud DB
       </button>
 
@@ -394,6 +399,133 @@
           <tr><td><code>139</code></td><td>TCP</td><td>NetBIOS Session Service — NetBT session layer (SMB over NetBIOS)</td></tr>
           <tr><td><code>445</code></td><td>TCP</td><td>Direct-Hosted SMB — SMB natively over TCP/IP (without NetBT layer; MS17-010 target)</td></tr>
         </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Instructor & Admin Portal Modal -->
+  <div class="modal-overlay" id="adminPortalModal">
+    <div class="modal-card" style="max-width: 1050px; width: 96%; max-height: 92vh; display: flex; flex-direction: column;">
+      <div class="modal-header" style="flex-shrink: 0;">
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <h3 style="font-size: 1.15rem; color: var(--accent-cyan); display: flex; align-items: center; gap: 8px;">
+            <span>🛡️</span> CEH v13 Instructor &amp; Admin Dashboard
+          </h3>
+          <span style="font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; background: rgba(0, 230, 118, 0.15); color: var(--accent-green); border: 1px solid rgba(0, 230, 118, 0.4);">
+            🟢 Live Student Sync
+          </span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn-header" onclick="refreshAdminPortal()" style="padding: 5px 12px; font-size: 0.78rem;" title="Refresh live student progress">
+            🔄 Refresh Roster
+          </button>
+          <button class="modal-close" onclick="closeAdminPortal()">&times;</button>
+        </div>
+      </div>
+
+      <div class="modal-body" style="overflow-y: auto; flex: 1; padding-top: 14px;">
+        <!-- Top KPI Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 18px;">
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px;">
+            <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Registered Students</div>
+            <div id="adminStatTotalStudents" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-cyan); margin-top: 4px;">0</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px;">
+            <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Total Tasks Solved</div>
+            <div id="adminStatTotalSolved" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-green); margin-top: 4px;">0</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px;">
+            <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Class Average Score</div>
+            <div id="adminStatAvgScore" style="font-size: 1.6rem; font-weight: 700; color: var(--accent-yellow); margin-top: 4px;">0 pts</div>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px;">
+            <div style="font-size: 0.74rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">Top Performer</div>
+            <div id="adminStatTopStudent" style="font-size: 1.15rem; font-weight: 700; color: var(--accent-gold); margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">-</div>
+          </div>
+        </div>
+
+        <!-- Admin Tabs -->
+        <div class="auth-tabs" style="margin-bottom: 16px;">
+          <button class="auth-tab active" id="tabAdminRoster" onclick="setAdminTab('roster')">👥 Student Roster &amp; Live Tasks</button>
+          <button class="auth-tab" id="tabAdminMatrix" onclick="setAdminTab('matrix')">📊 Class Task Matrix (Heatmap)</button>
+          <button class="auth-tab" id="tabAdminTools" onclick="setAdminTab('tools')">⚙️ Actions &amp; CSV Export</button>
+        </div>
+
+        <!-- Tab 1: Student Roster & Live Tasks -->
+        <div id="adminTabContentRoster">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 10px; flex-wrap: wrap;">
+            <input type="text" id="adminStudentSearch" oninput="filterAdminStudents()" placeholder="🔍 Filter student by username..." class="form-input" style="max-width: 300px; padding: 6px 12px; font-size: 0.82rem;" />
+            <span style="font-size: 0.76rem; color: var(--text-muted);">Real-time monitoring of active tasks across all devices</span>
+          </div>
+
+          <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px;">
+            <table class="leaderboard-table" style="margin: 0; width: 100%;">
+              <thead>
+                <tr>
+                  <th style="width: 50px;">#</th>
+                  <th>Student Account</th>
+                  <th style="min-width: 240px;">Current Task (Where they are now)</th>
+                  <th style="min-width: 140px;">Tasks Solved</th>
+                  <th>Score</th>
+                  <th>Last Active</th>
+                  <th style="width: 100px; text-align: center;">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="adminStudentTableBody">
+                <!-- Rows injected dynamically by app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 2: Class Task Matrix (Heatmap) -->
+        <div id="adminTabContentMatrix" style="display: none;">
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
+            Bird's-eye view of every student across all 25 lab challenges. <strong style="color:var(--accent-green);">✓</strong> = Solved, <strong style="color:var(--accent-cyan);">📍</strong> = Current Task.
+          </p>
+          <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; max-height: 420px;">
+            <table class="leaderboard-table" style="margin: 0; width: 100%; font-size: 0.74rem;">
+              <thead>
+                <tr id="adminMatrixHeader">
+                  <!-- Injected dynamically by app.js -->
+                </tr>
+              </thead>
+              <tbody id="adminMatrixBody">
+                <!-- Student rows injected dynamically by app.js -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Tab 3: Actions & CSV Export -->
+        <div id="adminTabContentTools" style="display: none;">
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+            <!-- Export Card -->
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+              <h4 style="font-size: 0.95rem; color: var(--accent-cyan); margin-bottom: 8px;">📥 Export Class Progress</h4>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;">
+                Download the complete student roster, current tasks, scores, and timestamps in standard CSV format for grading or LMS import.
+              </p>
+              <button type="button" class="btn-primary" onclick="exportAdminCSV()" style="width: 100%;">
+                Download Student Report (.CSV)
+              </button>
+            </div>
+
+            <!-- Manual Account Provisioning -->
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 8px; padding: 16px;">
+              <h4 style="font-size: 0.95rem; color: var(--accent-green); margin-bottom: 8px;">➕ Create Student Account</h4>
+              <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
+                Pre-register a student account directly into the shared cloud database.
+              </p>
+              <form onsubmit="handleAdminCreateUser(event)" style="display: flex; flex-direction: column; gap: 8px;">
+                <input type="text" id="adminNewUsername" class="form-input" placeholder="Student username..." required style="padding: 7px 10px; font-size: 0.82rem;" />
+                <input type="password" id="adminNewPassword" class="form-input" placeholder="Password (default: Pa$$w0rd)..." style="padding: 7px 10px; font-size: 0.82rem;" />
+                <button type="submit" class="btn-primary" style="padding: 8px;">Provision Account</button>
+              </form>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>

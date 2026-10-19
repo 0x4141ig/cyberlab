@@ -387,39 +387,45 @@ export default async function handler(req, res) {
   }
 
   // ==========================================
-  // 3. AUTO CLOUD DATABASE (Pre-provisioned Active Shared Store)
+  // 3. AUTO CLOUD DATABASE (KV Bucket: Multi-Device Sync)
   // ==========================================
-  const AUTO_CLOUD_DB_URL = "https://api.restful-api.dev/objects/ff808181a09d98f701a15404502d19ab";
+  const KV_BUCKET_BASE = "https://kvdb.io/duaHz7yFr98EAHvZku3Xz";
 
   try {
-    async function getAutoDb() {
-      const resp = await fetch(AUTO_CLOUD_DB_URL, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) CyberLab-Proxy/1.0',
-          'Accept': 'application/json'
-        }
-      });
-      if (!resp.ok) return { leaderboard: [], users: {} };
-      const json = await resp.json();
-      return json.data || { leaderboard: [], users: {} };
+    async function getKvUsers() {
+      try {
+        const resp = await fetch(`${KV_BUCKET_BASE}/users`);
+        if (!resp.ok) return {};
+        return await resp.json();
+      } catch (e) {
+        return {};
+      }
     }
 
-    async function patchAutoDb(partialData) {
-      const current = await getAutoDb();
-      const merged = {
-        users: partialData.users !== undefined ? partialData.users : (current.users || {}),
-        leaderboard: partialData.leaderboard !== undefined ? partialData.leaderboard : (current.leaderboard || [])
-      };
-      await fetch(AUTO_CLOUD_DB_URL, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) CyberLab-Proxy/1.0',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ data: merged })
+    async function saveKvUsers(users) {
+      await fetch(`${KV_BUCKET_BASE}/users`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(users)
       });
-      return merged;
+    }
+
+    async function getKvLeaderboard() {
+      try {
+        const resp = await fetch(`${KV_BUCKET_BASE}/leaderboard`);
+        if (!resp.ok) return [];
+        return await resp.json();
+      } catch (e) {
+        return [];
+      }
+    }
+
+    async function saveKvLeaderboard(leaderboard) {
+      await fetch(`${KV_BUCKET_BASE}/leaderboard`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(leaderboard)
+      });
     }
 
     // Action: Login
@@ -427,8 +433,7 @@ export default async function handler(req, res) {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
       const { username, password } = body || {};
       const cleanUser = (username || '').trim();
-      const db = await getAutoDb();
-      const users = db.users || {};
+      const users = await getKvUsers();
       const user = users[cleanUser];
       if (!user) return res.status(404).json({ error: 'Account not found' });
       if (user.password !== password) return res.status(401).json({ error: 'Invalid password' });
@@ -440,7 +445,10 @@ export default async function handler(req, res) {
           score: user.score || 0,
           solved: user.solved || [],
           conceptSolved: user.conceptSolved || [],
-          penalties: user.penalties || {}
+          penalties: user.penalties || {},
+          currentTaskId: user.currentTaskId || 1,
+          currentTaskTitle: user.currentTaskTitle || "Host Reachability & ICMP Verification",
+          currentTaskModule: user.currentTaskModule || "Module 01: Introduction to Ethical Hacking"
         }
       });
     }
@@ -453,8 +461,7 @@ export default async function handler(req, res) {
       if (!cleanUser || !password) return res.status(400).json({ error: 'Username and password required' });
       if (cleanUser.toLowerCase() === 'admin') return res.status(400).json({ error: 'Username reserved' });
       
-      const db = await getAutoDb();
-      const users = db.users || {};
+      const users = await getKvUsers();
       if (users[cleanUser]) {
         return res.status(400).json({ error: 'Username already exists' });
       }
@@ -465,24 +472,38 @@ export default async function handler(req, res) {
         solved: [],
         conceptSolved: [],
         penalties: {},
+        currentTaskId: 1,
+        currentTaskTitle: "Host Reachability & ICMP Verification",
+        currentTaskModule: "Module 01: Introduction to Ethical Hacking",
+        lastActive: "Just now",
         updatedAt: Date.now()
       };
-      const leaderboard = db.leaderboard || [];
+      await saveKvUsers(users);
+
+      const leaderboard = await getKvLeaderboard();
       const exIdx = leaderboard.findIndex(x => x.username.toLowerCase() === cleanUser.toLowerCase());
-      if (exIdx === -1) {
-        leaderboard.push({ username: cleanUser, score: 0, solvedCount: 0, lastActive: 'Just now' });
-      }
-      await patchAutoDb({ users, leaderboard });
+      const entry = {
+        username: cleanUser,
+        score: 0,
+        solvedCount: 0,
+        currentTaskId: 1,
+        currentTaskTitle: "Host Reachability & ICMP Verification",
+        lastActive: 'Just now'
+      };
+      if (exIdx === -1) leaderboard.push(entry);
+      else leaderboard[exIdx] = entry;
+      leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
+      await saveKvLeaderboard(leaderboard);
+
       return res.status(200).json({ status: 'ok' });
     }
 
     // Action: Save Progress
     if (req.method === 'POST' && action === 'save_progress') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      const { username, score, solved, conceptSolved, penalties } = body || {};
+      const { username, score, solved, conceptSolved, penalties, currentTaskId, currentTaskTitle, currentTaskModule } = body || {};
       const cleanUser = (username || '').trim();
-      const db = await getAutoDb();
-      const users = db.users || {};
+      const users = await getKvUsers();
       users[cleanUser] = {
         password: users[cleanUser]?.password || 'Pa$$w0rd',
         role: 'student',
@@ -490,27 +511,87 @@ export default async function handler(req, res) {
         solved: solved || [],
         conceptSolved: conceptSolved || [],
         penalties: penalties || {},
+        currentTaskId: currentTaskId || users[cleanUser]?.currentTaskId || 1,
+        currentTaskTitle: currentTaskTitle || users[cleanUser]?.currentTaskTitle || "Host Reachability & ICMP Verification",
+        currentTaskModule: currentTaskModule || users[cleanUser]?.currentTaskModule || "Module 01: Introduction to Ethical Hacking",
+        lastActive: 'Just now',
         updatedAt: Date.now()
       };
-      const leaderboard = db.leaderboard || [];
+      await saveKvUsers(users);
+
+      const leaderboard = await getKvLeaderboard();
       const exIdx = leaderboard.findIndex(x => x.username.toLowerCase() === cleanUser.toLowerCase());
       const entry = {
         username: cleanUser,
         score: Number(score) || 0,
         solvedCount: Array.isArray(solved) ? solved.length : 0,
+        currentTaskId: currentTaskId || users[cleanUser]?.currentTaskId || 1,
+        currentTaskTitle: currentTaskTitle || users[cleanUser]?.currentTaskTitle || "Host Reachability & ICMP Verification",
         lastActive: 'Just now'
       };
       if (exIdx !== -1) leaderboard[exIdx] = entry;
       else leaderboard.push(entry);
-      leaderboard.sort((a, b) => b.score - a.score || b.solvedCount - a.solvedCount);
-      await patchAutoDb({ users, leaderboard });
+      leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
+      await saveKvLeaderboard(leaderboard);
+
+      return res.status(200).json({ status: 'ok' });
+    }
+
+    // Action: Admin Get All Users with Task Details
+    if (req.method === 'GET' && action === 'admin_users') {
+      const users = await getKvUsers();
+      const userList = Object.entries(users).map(([uname, u]) => ({
+        username: uname,
+        role: u.role || 'student',
+        score: Number(u.score) || 0,
+        solved: Array.isArray(u.solved) ? u.solved : [],
+        solvedCount: Array.isArray(u.solved) ? u.solved.length : 0,
+        conceptSolved: Array.isArray(u.conceptSolved) ? u.conceptSolved : [],
+        conceptCount: Array.isArray(u.conceptSolved) ? u.conceptSolved.length : 0,
+        currentTaskId: u.currentTaskId || 1,
+        currentTaskTitle: u.currentTaskTitle || "Host Reachability & ICMP Verification",
+        currentTaskModule: u.currentTaskModule || "Module 01: Introduction to Ethical Hacking",
+        lastActive: u.lastActive || "Recently",
+        updatedAt: u.updatedAt || Date.now()
+      }));
+      userList.sort((a, b) => b.score - a.score || b.solvedCount - a.solvedCount);
+      return res.status(200).json({ status: 'ok', users: userList });
+    }
+
+    // Action: Admin Reset User Progress
+    if (req.method === 'POST' && action === 'admin_reset_user') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      const { username } = body || {};
+      const cleanUser = (username || '').trim();
+      const users = await getKvUsers();
+      if (users[cleanUser]) {
+        users[cleanUser].score = 0;
+        users[cleanUser].solved = [];
+        users[cleanUser].conceptSolved = [];
+        users[cleanUser].penalties = {};
+        users[cleanUser].currentTaskId = 1;
+        users[cleanUser].currentTaskTitle = "Host Reachability & ICMP Verification";
+        users[cleanUser].lastActive = "Reset by Admin";
+        users[cleanUser].updatedAt = Date.now();
+        await saveKvUsers(users);
+      }
+      const leaderboard = await getKvLeaderboard();
+      const exIdx = leaderboard.findIndex(x => x.username.toLowerCase() === cleanUser.toLowerCase());
+      if (exIdx !== -1) {
+        leaderboard[exIdx].score = 0;
+        leaderboard[exIdx].solvedCount = 0;
+        leaderboard[exIdx].currentTaskId = 1;
+        leaderboard[exIdx].currentTaskTitle = "Host Reachability & ICMP Verification";
+        leaderboard[exIdx].lastActive = "Reset by Admin";
+        leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
+        await saveKvLeaderboard(leaderboard);
+      }
       return res.status(200).json({ status: 'ok' });
     }
 
     // Default GET: Fetch Leaderboard
     if (req.method === 'GET') {
-      const db = await getAutoDb();
-      const leaderboard = db.leaderboard || [];
+      const leaderboard = await getKvLeaderboard();
       leaderboard.sort((a, b) => (b.score || 0) - (a.score || 0) || (b.solvedCount || 0) - (a.solvedCount || 0));
       return res.status(200).json({ status: 'ok', leaderboard });
     }
@@ -518,22 +599,23 @@ export default async function handler(req, res) {
     // Default POST: Upsert Leaderboard entry
     if (req.method === 'POST') {
       const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      const { username, score, solvedCount, role } = body || {};
+      const { username, score, solvedCount, currentTaskId, currentTaskTitle, role } = body || {};
       if (!username || role === 'admin') return res.status(400).json({ error: 'Invalid user payload' });
       const cleanUser = username.trim();
-      const db = await getAutoDb();
-      const leaderboard = db.leaderboard || [];
+      const leaderboard = await getKvLeaderboard();
       const exIdx = leaderboard.findIndex(x => x.username.toLowerCase() === cleanUser.toLowerCase());
       const entry = {
         username: cleanUser,
         score: Number(score) || 0,
         solvedCount: Number(solvedCount) || 0,
+        currentTaskId: currentTaskId || 1,
+        currentTaskTitle: currentTaskTitle || "Host Reachability & ICMP Verification",
         lastActive: 'Just now'
       };
       if (exIdx !== -1) leaderboard[exIdx] = entry;
       else leaderboard.push(entry);
       leaderboard.sort((a, b) => b.score - a.score || b.solvedCount - a.solvedCount);
-      await patchAutoDb({ leaderboard });
+      await saveKvLeaderboard(leaderboard);
       return res.status(200).json({ status: 'ok', entry });
     }
   } catch (err) {

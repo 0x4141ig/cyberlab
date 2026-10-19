@@ -1156,5 +1156,50 @@ header {
   .manual-pane, .terminal-pane {
     width: 100%;
     height: 520px;
-  }
 }
+
+/* Admin Portal & Live Matrix Styles */
+.matrix-cell {
+  width: 32px;
+  height: 28px;
+  text-align: center;
+  font-size: 0.72rem;
+  padding: 0 !important;
+  vertical-align: middle;
+}
+.matrix-solved {
+  background: rgba(0, 230, 118, 0.18) !important;
+  color: var(--accent-green) !important;
+  font-weight: 700;
+}
+.matrix-current {
+  background: rgba(0, 229, 255, 0.28) !important;
+  color: var(--accent-cyan) !important;
+  position: relative;
+  font-weight: 700;
+  border: 1px solid var(--accent-cyan) !important;
+}
+.admin-task-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 0.76rem;
+  color: var(--accent-cyan);
+}
+.student-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-main);
+}
+

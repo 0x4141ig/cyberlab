@@ -17,3 +17,5 @@ ehthumbs_vista.db
 *.log
 *.tmp
 test_*.html
+__pycache__/
+*.pyc
