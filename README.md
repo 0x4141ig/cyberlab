@@ -73,6 +73,21 @@ You can publish this app online so all your colleagues and students can access i
 
 ---
 
+## ▲ How to Deploy on Vercel (Global Shared Leaderboard)
+
+To enable a **shared real-time CTF leaderboard** across all student devices:
+
+1. Go to **[vercel.com](https://vercel.com)** and sign in with your GitHub account (`0x4141ig`).
+2. Click **"Add New..."** > **"Project"**.
+3. Select your repository: **`cyberlab`** and click **"Deploy"**.
+4. In your Vercel project dashboard, click the **"Storage"** tab:
+   - Click **"Create Database"** > Select **"KV"** (Redis).
+   - Name it `cyberlab-kv` and click **"Create"**.
+   - Click **"Connect to Project"** and select `cyberlab`.
+5. That's it! Vercel automatically powers the `/api/leaderboard` serverless API. All student scores will synchronize across all machines and phones in real time!
+
+---
+
 ## 🔄 Making Changes & Pushing to GitHub
 
 Whenever you edit files or add new lab questions:

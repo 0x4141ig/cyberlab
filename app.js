@@ -669,6 +669,48 @@ function saveCurrentUser() {
   saveStoredUsers(users);
 }
 
+function getApiUrl() {
+  if (window.location.hostname.includes("vercel.app") || window.location.hostname === "localhost") {
+    return "/api/leaderboard";
+  }
+  return window.VERCEL_API_URL || "/api/leaderboard";
+}
+
+async function syncUserScoreToCloud() {
+  if (!currentUser || currentUser.role === "admin") return;
+  try {
+    const url = getApiUrl();
+    await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: currentUser.username,
+        score: currentUser.score,
+        solvedCount: currentUser.solved.length,
+        role: currentUser.role
+      })
+    });
+  } catch (e) {
+    // Offline fallback - local storage handles persistence
+  }
+}
+
+async function fetchCloudLeaderboard() {
+  try {
+    const url = getApiUrl();
+    const res = await fetch(url);
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data && data.status === "ok" && Array.isArray(data.leaderboard)) {
+      saveLeaderboard(data.leaderboard);
+      return data.leaderboard;
+    }
+  } catch (e) {
+    // Offline fallback
+  }
+  return null;
+}
+
 function updateLeaderboardWithUser() {
   if (!currentUser || currentUser.role === "admin") return;
 
@@ -690,6 +732,9 @@ function updateLeaderboardWithUser() {
 
   lb.sort((a, b) => b.score - a.score || b.solvedCount - a.solvedCount);
   saveLeaderboard(lb);
+
+  // Sync to Vercel KV cloud in background
+  syncUserScoreToCloud();
 }
 
 // Modals
@@ -833,12 +878,22 @@ function handleSignOut() {
   openAuthModal(true);
 }
 
-function openLeaderboard() {
+async function openLeaderboard() {
+  document.getElementById("leaderboardModal").style.display = "flex";
+  renderLeaderboardRows(getLeaderboard());
+
+  // Asynchronously fetch live scores from Vercel Cloud API
+  const cloudLb = await fetchCloudLeaderboard();
+  if (cloudLb && cloudLb.length > 0) {
+    renderLeaderboardRows(cloudLb);
+  }
+}
+
+function renderLeaderboardRows(lb) {
   const lbBody = document.getElementById("leaderboardBody");
   lbBody.innerHTML = "";
-  const lb = getLeaderboard();
 
-  if (lb.length === 0) {
+  if (!lb || lb.length === 0) {
     lbBody.innerHTML = `
       <tr>
         <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px 10px;">
@@ -848,31 +903,30 @@ function openLeaderboard() {
         </td>
       </tr>
     `;
-  } else {
-    lb.forEach((entry, idx) => {
-      const tr = document.createElement("tr");
-      if (currentUser && entry.username.toLowerCase() === currentUser.username.toLowerCase()) {
-        tr.className = "user-row";
-      }
-
-      let rankBadge = "";
-      if (idx === 0) rankBadge = '<span class="rank-badge rank-1">🥇</span>';
-      else if (idx === 1) rankBadge = '<span class="rank-badge rank-2">🥈</span>';
-      else if (idx === 2) rankBadge = '<span class="rank-badge rank-3">🥉</span>';
-      else rankBadge = `<span class="rank-badge rank-other">#${idx + 1}</span>`;
-
-      tr.innerHTML = `
-        <td>${rankBadge}</td>
-        <td><strong>${escapeHtml(entry.username)}</strong> ${currentUser && entry.username === currentUser.username ? '<span style="color:var(--accent-cyan); font-size:0.75rem;">(You)</span>' : ''}</td>
-        <td>${entry.solvedCount} / ${CEH_QUESTIONS.length}</td>
-        <td style="color:var(--accent-yellow); font-weight:700;">${entry.score} pts</td>
-        <td style="color:var(--text-muted); font-size:0.78rem;">${entry.lastActive}</td>
-      `;
-      lbBody.appendChild(tr);
-    });
+    return;
   }
 
-  document.getElementById("leaderboardModal").style.display = "flex";
+  lb.forEach((entry, idx) => {
+    const tr = document.createElement("tr");
+    if (currentUser && entry.username.toLowerCase() === currentUser.username.toLowerCase()) {
+      tr.className = "user-row";
+    }
+
+    let rankBadge = "";
+    if (idx === 0) rankBadge = '<span class="rank-badge rank-1">🥇</span>';
+    else if (idx === 1) rankBadge = '<span class="rank-badge rank-2">🥈</span>';
+    else if (idx === 2) rankBadge = '<span class="rank-badge rank-3">🥉</span>';
+    else rankBadge = `<span class="rank-badge rank-other">#${idx + 1}</span>`;
+
+    tr.innerHTML = `
+      <td>${rankBadge}</td>
+      <td><strong>${escapeHtml(entry.username)}</strong> ${currentUser && entry.username === currentUser.username ? '<span style="color:var(--accent-cyan); font-size:0.75rem;">(You)</span>' : ''}</td>
+      <td>${entry.solvedCount} / ${CEH_QUESTIONS.length}</td>
+      <td style="color:var(--accent-yellow); font-weight:700;">${entry.score} pts</td>
+      <td style="color:var(--text-muted); font-size:0.78rem;">${entry.lastActive || 'Just now'}</td>
+    `;
+    lbBody.appendChild(tr);
+  });
 }
 
 function closeLeaderboard() {

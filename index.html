@@ -285,7 +285,10 @@
     <div class="modal-card">
       <div class="modal-header">
         <h3 style="font-size: 1.1rem; color: var(--accent-gold);">🏆 CEH v13 Practice Lab — CTF Leaderboard</h3>
-        <button class="modal-close" onclick="closeLeaderboard()">&times;</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button class="btn-header" onclick="openLeaderboard()" style="padding: 4px 10px; font-size: 0.78rem;" title="Refresh live rankings">🔄 Refresh</button>
+          <button class="modal-close" onclick="closeLeaderboard()">&times;</button>
+        </div>
       </div>
       <div class="modal-body">
         <p style="color: var(--text-muted); font-size: 0.82rem; margin-bottom: 12px;">
