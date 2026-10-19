@@ -393,6 +393,11 @@ function updateProgress() {
 
 // Evaluate Command
 function evaluateCommand(userCmd) {
+  if (!currentUser) {
+    openAuthModal(true);
+    return;
+  }
+
   const q = CEH_QUESTIONS[currentIndex];
   const trimmed = userCmd.trim();
 
@@ -598,6 +603,10 @@ function renderConceptQuestion(q, wasAlreadyCompleted = false) {
 }
 
 function selectConceptAnswer(q, option, btnElement) {
+  if (!currentUser) {
+    openAuthModal(true);
+    return;
+  }
   const allBtns = elConceptOptions.querySelectorAll(".concept-opt-btn");
   
   if (option.correct) {
@@ -674,8 +683,12 @@ function prevQuestion() {
 
 // Hint & Solution (Strictly NO Copy/Paste - forces typing)
 function showHint() {
+  if (!currentUser) {
+    openAuthModal(true);
+    return;
+  }
   const q = CEH_QUESTIONS[currentIndex];
-  if (currentUser && currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
+  if (currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
     currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 15;
     saveCurrentUser();
   }
@@ -683,8 +696,12 @@ function showHint() {
 }
 
 function showSolution() {
+  if (!currentUser) {
+    openAuthModal(true);
+    return;
+  }
   const q = CEH_QUESTIONS[currentIndex];
-  if (currentUser && currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
+  if (currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
     currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 50;
     saveCurrentUser();
   }
@@ -1572,7 +1589,7 @@ function openAuthModal(force = false) {
   const modal = document.getElementById("authModal");
   const closeBtn = document.getElementById("authModalClose");
   if (closeBtn) {
-    closeBtn.style.display = "block";
+    closeBtn.style.display = (!currentUser || force) ? "none" : "block";
   }
   const authNotice = document.getElementById("authCloudNotice");
   if (authNotice) {
@@ -1588,6 +1605,10 @@ function openAuthModal(force = false) {
 }
 
 function closeAuthModal() {
+  if (!currentUser) {
+    alert("Please sign in or create a practice username to enter the labs.");
+    return;
+  }
   const modal = document.getElementById("authModal");
   if (modal) {
     modal.style.display = "none";
@@ -1637,6 +1658,7 @@ async function handleLogin(e) {
       penalties: {}
     };
     sessionStorage.setItem("ceh_current_user", "admin");
+    localStorage.setItem("ceh_active_user", "admin");
     closeAuthModal();
     updateAuthUI();
     renderQuestionGrid();
@@ -1657,6 +1679,7 @@ async function handleLogin(e) {
     if (cloudRes.ok && cloudRes.user) {
       currentUser = cloudRes.user;
       sessionStorage.setItem("ceh_current_user", currentUser.username);
+      localStorage.setItem("ceh_active_user", currentUser.username);
 
       // Cache user locally
       const users = getStoredUsers();
@@ -1707,6 +1730,7 @@ async function handleLogin(e) {
           currentTaskModule: localUsers[u].currentTaskModule || "Module 01: Introduction to Ethical Hacking"
         };
         sessionStorage.setItem("ceh_current_user", u);
+        localStorage.setItem("ceh_active_user", u);
         if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
           currentIndex = currentUser.currentTaskId - 1;
         }
@@ -1738,6 +1762,7 @@ async function handleLogin(e) {
       currentTaskModule: users[u].currentTaskModule || "Module 01: Introduction to Ethical Hacking"
     };
     sessionStorage.setItem("ceh_current_user", u);
+    localStorage.setItem("ceh_active_user", u);
     if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
       currentIndex = currentUser.currentTaskId - 1;
     }
@@ -1804,6 +1829,7 @@ async function handleSignup(e) {
     penalties: {}
   };
   sessionStorage.setItem("ceh_current_user", u);
+  localStorage.setItem("ceh_active_user", u);
 
   updateLeaderboardWithUser();
   closeAuthModal();
@@ -1816,6 +1842,7 @@ async function handleSignup(e) {
 function handleSignOut() {
   currentUser = null;
   sessionStorage.removeItem("ceh_current_user");
+  localStorage.removeItem("ceh_active_user");
   document.getElementById("loginUsername").value = "";
   document.getElementById("loginPassword").value = "";
   document.getElementById("signupUsername").value = "";
@@ -2455,6 +2482,9 @@ window.addEventListener("keydown", (e) => {
   if (modalEl) {
     modalEl.addEventListener("click", (e) => {
       if (e.target.id === id) {
+        if (id === "authModal" && !currentUser) {
+          return; // Prevent dismissing without login/signup
+        }
         modalEl.style.display = "none";
       }
     });
@@ -2487,7 +2517,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Check if an authenticated user session is active
-  const activeUser = sessionStorage.getItem("ceh_current_user");
+  const activeUser = sessionStorage.getItem("ceh_current_user") || localStorage.getItem("ceh_active_user");
   if (activeUser && (users[activeUser] || activeUser.toLowerCase() === "admin")) {
     const userData = users[activeUser] || {};
     currentUser = {
@@ -2510,7 +2540,9 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderQuestionGrid();
     loadQuestion(currentIndex);
   } else {
+    // Show login / signup modal FIRST to protect the labs!
     currentUser = null;
     updateAuthUI();
+    openAuthModal(true);
   }
 });
