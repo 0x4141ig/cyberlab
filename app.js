@@ -712,7 +712,10 @@ function isCloudApiAvailable() {
 
 async function fetchDirectCloudUsers() {
   try {
-    const resp = await fetch(`${AUTO_CLOUD_DB_BASE}/users`);
+    const resp = await fetch(`${AUTO_CLOUD_DB_BASE}/users?t=${Date.now()}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache, no-store" }
+    });
     if (!resp.ok) return {};
     return await resp.json();
   } catch (e) {
@@ -734,7 +737,10 @@ async function saveDirectCloudUsers(users) {
 
 async function fetchDirectCloudLeaderboard() {
   try {
-    const resp = await fetch(`${AUTO_CLOUD_DB_BASE}/leaderboard`);
+    const resp = await fetch(`${AUTO_CLOUD_DB_BASE}/leaderboard?t=${Date.now()}`, {
+      cache: "no-store",
+      headers: { "Cache-Control": "no-cache, no-store" }
+    });
     if (!resp.ok) return [];
     return await resp.json();
   } catch (e) {
@@ -1398,8 +1404,8 @@ async function fetchCloudLeaderboard() {
 
   // 2. Vercel Serverless API Query
   try {
-    const url = getApiUrl();
-    const res = await fetch(url);
+    const url = getApiUrl() + "?t=" + Date.now();
+    const res = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
     if (res.ok) {
       const data = await res.json();
       if (data && data.status === "ok" && Array.isArray(data.leaderboard)) {
@@ -1895,8 +1901,8 @@ function setAdminTab(tab) {
 async function fetchAdminUsers() {
   // 1. Try Vercel Serverless API
   try {
-    const url = getApiUrl() + "?action=admin_users";
-    const res = await fetch(url);
+    const url = getApiUrl() + "?action=admin_users&t=" + Date.now();
+    const res = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
     if (res.ok) {
       const data = await res.json();
       if (data && data.status === "ok" && Array.isArray(data.users)) {

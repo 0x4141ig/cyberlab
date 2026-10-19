@@ -50,7 +50,10 @@ function resolveSupabaseCredentials() {
 }
 
 export default async function handler(req, res) {
-  // Enable CORS
+  // Enable CORS & Disable Caching for Real-Time Live Sync
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,POST');
@@ -395,7 +398,10 @@ export default async function handler(req, res) {
   try {
     async function getKvUsers() {
       try {
-        const resp = await fetch(`${KV_BUCKET_BASE}/users`);
+        const resp = await fetch(`${KV_BUCKET_BASE}/users?t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' }
+        });
         if (!resp.ok) return {};
         return await resp.json();
       } catch (e) {
@@ -413,7 +419,10 @@ export default async function handler(req, res) {
 
     async function getKvLeaderboard() {
       try {
-        const resp = await fetch(`${KV_BUCKET_BASE}/leaderboard`);
+        const resp = await fetch(`${KV_BUCKET_BASE}/leaderboard?t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' }
+        });
         if (!resp.ok) return [];
         return await resp.json();
       } catch (e) {
