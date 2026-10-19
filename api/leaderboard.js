@@ -1,5 +1,54 @@
 // Vercel Serverless Function: /api/leaderboard
 // Supports Supabase PostgreSQL Database (Leaderboard + User Credentials) & Upstash Redis
+
+function resolveSupabaseCredentials() {
+  // 1. Explicit Supabase URLs
+  let url = process.env.SUPABASE_URL ||
+            process.env.NEXT_PUBLIC_SUPABASE_URL ||
+            process.env.SUPABASE_REST_URL;
+
+  // 2. Derive URL from POSTGRES_HOST, POSTGRES_USER, or POSTGRES_URL if not explicitly set
+  // e.g. POSTGRES_HOST = "db.xyz.supabase.co" -> https://xyz.supabase.co
+  // e.g. POSTGRES_USER = "postgres.xyz" -> https://xyz.supabase.co
+  if (!url) {
+    if (process.env.POSTGRES_HOST && process.env.POSTGRES_HOST.includes('supabase.co')) {
+      const match = process.env.POSTGRES_HOST.match(/db\.([^.]+)\.supabase\.co/);
+      if (match) {
+        url = `https://${match[1]}.supabase.co`;
+      }
+    }
+    if (!url && process.env.POSTGRES_USER && process.env.POSTGRES_USER.startsWith('postgres.')) {
+      const projectRef = process.env.POSTGRES_USER.replace(/^postgres\./, '');
+      if (projectRef) {
+        url = `https://${projectRef}.supabase.co`;
+      }
+    }
+    if (!url && process.env.POSTGRES_URL) {
+      const match = process.env.POSTGRES_URL.match(/postgres(?:ql)?:\/\/postgres\.([^:]+):/);
+      if (match) {
+        url = `https://${match[1]}.supabase.co`;
+      }
+    }
+  }
+
+  // 3. API Keys
+  const key = process.env.SUPABASE_ANON_KEY ||
+              process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+              process.env.SUPABASE_SERVICE_ROLE_KEY ||
+              process.env.SUPABASE_KEY ||
+              process.env.SUPABASE_API_KEY;
+
+  const publicAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+                        process.env.SUPABASE_ANON_KEY ||
+                        key;
+
+  return {
+    url: url ? url.trim().replace(/\/+$/, '') : null,
+    key: key ? key.trim() : null,
+    publicAnonKey: publicAnonKey ? publicAnonKey.trim() : null
+  };
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -14,12 +63,51 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  const supabaseUrl = process.env.SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const { url: supabaseUrl, key: supabaseKey, publicAnonKey } = resolveSupabaseCredentials();
+
   const kvUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
   const kvToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 
   const action = req.query?.action || '';
+
+  // ==========================================
+  // Diagnostic Endpoint (Safe inspection of env vars)
+  // ==========================================
+  if (action === 'diag') {
+    const relevantKeys = Object.keys(process.env).filter(k => 
+      /supabase|postgres|kv|redis|next_public/i.test(k)
+    );
+    const envSummary = {};
+    for (const k of relevantKeys) {
+      const v = process.env[k] || '';
+      envSummary[k] = v ? `Present (length: ${v.length})` : 'Empty';
+    }
+    return res.status(200).json({
+      status: 'ok',
+      hasSupabaseUrl: Boolean(supabaseUrl),
+      hasSupabaseKey: Boolean(supabaseKey),
+      hasKv: Boolean(kvUrl && kvToken),
+      resolvedUrl: supabaseUrl ? supabaseUrl.replace(/^(https?:\/\/[^.]+).*/, '$1.supabase.co') : null,
+      detectedEnvVars: envSummary
+    });
+  }
+
+  // ==========================================
+  // Config Endpoint (Auto-discover credentials for frontend)
+  // ==========================================
+  if (action === 'config') {
+    if (supabaseUrl && publicAnonKey) {
+      return res.status(200).json({
+        status: 'ok',
+        supabaseUrl,
+        supabaseAnonKey: publicAnonKey
+      });
+    }
+    return res.status(200).json({
+      status: 'unconfigured',
+      message: 'Supabase credentials not found in Vercel environment variables.'
+    });
+  }
 
   // ==========================================
   // 1. SUPABASE DATABASE (Primary)
@@ -166,7 +254,8 @@ export default async function handler(req, res) {
         );
 
         if (!response.ok) {
-          throw new Error(`Supabase returned status ${response.status}`);
+          const errText = await response.text();
+          throw new Error(`Supabase returned status ${response.status}: ${errText}`);
         }
 
         const data = await response.json();
@@ -296,9 +385,13 @@ export default async function handler(req, res) {
   }
 
   // Fallback if not yet linked
+  const relevantKeys = Object.keys(process.env).filter(k => 
+    /supabase|postgres|kv|redis|next_public/i.test(k)
+  );
   return res.status(200).json({
     status: 'unconfigured',
-    message: 'Please connect Supabase or Upstash Redis in your Vercel Project settings.',
+    message: 'Supabase environment variables (SUPABASE_URL and SUPABASE_ANON_KEY) are not set in this Vercel deployment.',
+    detectedEnvKeys: relevantKeys,
     leaderboard: []
   });
 }

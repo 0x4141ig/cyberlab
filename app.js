@@ -687,31 +687,82 @@ function getApiUrl() {
   return window.VERCEL_API_URL || "/api/leaderboard";
 }
 
+function isCloudApiAvailable() {
+  const cfg = getSupabaseConfig();
+  return cfg.isConfigured || window.location.hostname.includes("vercel.app") || Boolean(window.VERCEL_API_URL);
+}
+
+// Auto-discover Supabase credentials if deployed on Vercel with integration
+async function autoDiscoverCloudConfig() {
+  const current = getSupabaseConfig();
+  if (current.isConfigured) return current;
+
+  try {
+    const apiUrl = getApiUrl();
+    const res = await fetch(`${apiUrl}?action=config`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.status === "ok" && data.supabaseUrl && data.supabaseAnonKey) {
+        window.SUPABASE_URL = data.supabaseUrl;
+        window.SUPABASE_ANON_KEY = data.supabaseAnonKey;
+        return {
+          url: data.supabaseUrl,
+          anonKey: data.supabaseAnonKey,
+          isConfigured: true
+        };
+      }
+    }
+  } catch (e) {
+    // Offline or static
+  }
+  return getSupabaseConfig();
+}
+
 // --------------------------------------------------------
 // Cloud Connection & Status Verification
 // --------------------------------------------------------
 async function testSupabaseConnection(url, anonKey) {
-  if (!url || !anonKey) {
-    return { ok: false, message: "URL or Key is empty." };
-  }
-  const cleanUrl = url.trim().replace(/\/+$/, "");
-  const cleanKey = anonKey.trim();
-  try {
-    const res = await fetch(`${cleanUrl}/rest/v1/leaderboard?select=username&limit=1`, {
-      method: "GET",
-      headers: {
-        apikey: cleanKey,
-        Authorization: `Bearer ${cleanKey}`
+  // If explicitly provided, test direct REST query
+  if (url && anonKey) {
+    const cleanUrl = url.trim().replace(/\/+$/, "");
+    const cleanKey = anonKey.trim();
+    try {
+      const res = await fetch(`${cleanUrl}/rest/v1/leaderboard?select=username&limit=1`, {
+        method: "GET",
+        headers: {
+          apikey: cleanKey,
+          Authorization: `Bearer ${cleanKey}`
+        }
+      });
+      if (res.ok) {
+        return { ok: true, message: "Connected successfully to Supabase!" };
       }
-    });
-    if (res.ok) {
-      return { ok: true, message: "Connected successfully to Supabase!" };
+      const errText = await res.text();
+      return { ok: false, message: `Supabase returned HTTP ${res.status}: ${errText}` };
+    } catch (err) {
+      return { ok: false, message: `Network error: ${err.message}` };
     }
-    const errText = await res.text();
-    return { ok: false, message: `Supabase returned HTTP ${res.status}: ${errText}` };
-  } catch (err) {
-    return { ok: false, message: `Network error: ${err.message}` };
   }
+
+  // If on Vercel, test via Vercel serverless diagnostic
+  if (window.location.hostname.includes("vercel.app") || Boolean(window.VERCEL_API_URL)) {
+    try {
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}?action=diag`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.hasSupabaseUrl && data.hasSupabaseKey) {
+          return { ok: true, message: `Connected via Vercel (${data.resolvedUrl || 'Supabase'})` };
+        } else if (data && data.hasKv) {
+          return { ok: true, message: "Connected via Vercel KV Redis" };
+        } else {
+          return { ok: false, message: "Supabase integration not yet linked to this Vercel project." };
+        }
+      }
+    } catch (e) {}
+  }
+
+  return { ok: false, message: "URL or Key is empty." };
 }
 
 async function updateCloudStatusIndicator() {
@@ -727,7 +778,7 @@ async function updateCloudStatusIndicator() {
     authNoticeContainer.style.display = isAdmin ? "flex" : "none";
   }
 
-  if (!config.isConfigured) {
+  if (!config.isConfigured && !window.location.hostname.includes("vercel.app")) {
     if (banner) {
       banner.style.background = "rgba(255, 255, 255, 0.04)";
       banner.style.borderColor = "var(--border-color)";
@@ -738,7 +789,7 @@ async function updateCloudStatusIndicator() {
     return;
   }
 
-  if (textEl) textEl.innerText = "Verifying Supabase connection...";
+  if (textEl) textEl.innerText = "Verifying cloud database connection...";
   if (dotEl) dotEl.innerText = "🟡";
 
   const result = await testSupabaseConnection(config.url, config.anonKey);
@@ -747,17 +798,18 @@ async function updateCloudStatusIndicator() {
       banner.style.background = "rgba(0, 230, 118, 0.1)";
       banner.style.borderColor = "rgba(0, 230, 118, 0.4)";
     }
-    if (textEl) textEl.innerHTML = `<strong style="color:var(--accent-green);">✓ Connected to Supabase Cloud</strong><br><span style="font-size:0.72rem; color:var(--text-muted);">${escapeHtml(config.url)}</span>`;
+    const label = config.url ? escapeHtml(config.url) : result.message;
+    if (textEl) textEl.innerHTML = `<strong style="color:var(--accent-green);">✓ Connected to Cloud Database</strong><br><span style="font-size:0.72rem; color:var(--text-muted);">${label}</span>`;
     if (dotEl) dotEl.innerText = "🟢";
-    if (authNotice) authNotice.innerHTML = `🟢 <strong style="color:var(--accent-green);">Connected to Supabase</strong> (Multi-device sync active)`;
+    if (authNotice) authNotice.innerHTML = `🟢 <strong style="color:var(--accent-green);">Connected to Cloud DB</strong> (Multi-device sync active)`;
   } else {
     if (banner) {
       banner.style.background = "rgba(255, 23, 68, 0.1)";
       banner.style.borderColor = "rgba(255, 23, 68, 0.4)";
     }
-    if (textEl) textEl.innerHTML = `<strong style="color:var(--accent-red);">Connection Failed</strong><br><span style="font-size:0.72rem; color:#ff80ab;">${escapeHtml(result.message)}</span>`;
+    if (textEl) textEl.innerHTML = `<strong style="color:var(--accent-red);">Connection Not Configured</strong><br><span style="font-size:0.72rem; color:#ff80ab;">${escapeHtml(result.message)}</span>`;
     if (dotEl) dotEl.innerText = "🔴";
-    if (authNotice) authNotice.innerHTML = `⚠️ <strong style="color:var(--accent-yellow);">Supabase Disconnected</strong> (Falling back to local)`;
+    if (authNotice) authNotice.innerHTML = `⚠️ <strong style="color:var(--accent-yellow);">Database Disconnected</strong> (Using local cache)`;
   }
 }
 
@@ -835,183 +887,224 @@ function clearCloudConfig() {
 // Cloud User Credentials & Progress Sync
 // --------------------------------------------------------
 async function cloudSignupUser(username, password) {
-  const config = getSupabaseConfig();
-  if (!config.isConfigured) return { ok: false, offline: true };
+  let config = getSupabaseConfig();
+  if (!config.isConfigured) {
+    config = await autoDiscoverCloudConfig();
+  }
 
   const cleanUser = username.trim();
 
-  // 1. Check if user already exists
-  try {
-    const checkRes = await fetch(
-      `${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(cleanUser)}&select=username`,
-      {
-        headers: {
-          apikey: config.anonKey,
-          Authorization: `Bearer ${config.anonKey}`
+  // 1. Direct Supabase REST API (when configured directly)
+  if (config.isConfigured) {
+    try {
+      const checkRes = await fetch(
+        `${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(cleanUser)}&select=username`,
+        {
+          headers: {
+            apikey: config.anonKey,
+            Authorization: `Bearer ${config.anonKey}`
+          }
+        }
+      );
+      if (checkRes.ok) {
+        const existing = await checkRes.json();
+        if (Array.isArray(existing) && existing.length > 0) {
+          return { ok: false, message: "Username already exists. Please choose a different username or sign in." };
         }
       }
-    );
-    if (checkRes.ok) {
-      const existing = await checkRes.json();
-      if (Array.isArray(existing) && existing.length > 0) {
-        return { ok: false, message: "Username already exists. Please choose a different username or sign in." };
+
+      const nowIso = new Date().toISOString();
+      const insertUserRes = await fetch(`${config.url}/rest/v1/lab_users`, {
+        method: "POST",
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation"
+        },
+        body: JSON.stringify({
+          username: cleanUser,
+          password: password,
+          role: "student",
+          score: 0,
+          solved: [],
+          concept_solved: [],
+          penalties: {},
+          created_at: nowIso,
+          updated_at: nowIso
+        })
+      });
+
+      if (insertUserRes.ok) {
+        await fetch(`${config.url}/rest/v1/leaderboard`, {
+          method: "POST",
+          headers: {
+            apikey: config.anonKey,
+            Authorization: `Bearer ${config.anonKey}`,
+            "Content-Type": "application/json",
+            Prefer: "resolution=merge-duplicates"
+          },
+          body: JSON.stringify({
+            username: cleanUser,
+            score: 0,
+            solved_count: 0,
+            last_active: "Just now",
+            updated_at: nowIso
+          })
+        });
+        return { ok: true };
+      }
+    } catch (err) {
+      console.warn("Direct Supabase signup error:", err);
+    }
+  }
+
+  // 2. Vercel Serverless API Proxy
+  try {
+    const apiUrl = getApiUrl();
+    const res = await fetch(`${apiUrl}?action=signup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: cleanUser, password })
+    });
+    if (res.ok) {
+      return { ok: true };
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      if (errData && errData.error) {
+        return { ok: false, message: errData.error };
       }
     }
   } catch (e) {
-    console.warn("Cloud user existence check error:", e);
+    console.warn("Vercel API signup proxy error:", e);
   }
 
-  // 2. Insert into lab_users
-  try {
-    const nowIso = new Date().toISOString();
-    const insertUserRes = await fetch(`${config.url}/rest/v1/lab_users`, {
-      method: "POST",
-      headers: {
-        apikey: config.anonKey,
-        Authorization: `Bearer ${config.anonKey}`,
-        "Content-Type": "application/json",
-        Prefer: "return=representation"
-      },
-      body: JSON.stringify({
-        username: cleanUser,
-        password: password,
-        role: "student",
-        score: 0,
-        solved: [],
-        concept_solved: [],
-        penalties: {},
-        created_at: nowIso,
-        updated_at: nowIso
-      })
-    });
-
-    if (!insertUserRes.ok) {
-      const errText = await insertUserRes.text();
-      return { ok: false, message: `Could not create account in Supabase: ${errText}` };
-    }
-
-    // 3. Insert initial row into leaderboard
-    await fetch(`${config.url}/rest/v1/leaderboard`, {
-      method: "POST",
-      headers: {
-        apikey: config.anonKey,
-        Authorization: `Bearer ${config.anonKey}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates"
-      },
-      body: JSON.stringify({
-        username: cleanUser,
-        score: 0,
-        solved_count: 0,
-        last_active: "Just now",
-        updated_at: nowIso
-      })
-    });
-
-    return { ok: true };
-  } catch (err) {
-    console.error("Cloud signup error:", err);
-    return { ok: false, message: `Network error creating account: ${err.message}` };
-  }
+  return { ok: false, offline: true };
 }
 
 async function cloudLoginUser(username, password) {
-  const config = getSupabaseConfig();
-  if (!config.isConfigured) return { ok: false, offline: true };
+  let config = getSupabaseConfig();
+  if (!config.isConfigured) {
+    config = await autoDiscoverCloudConfig();
+  }
 
   const cleanUser = username.trim();
 
-  try {
-    const res = await fetch(
-      `${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(cleanUser)}&select=*`,
-      {
-        headers: {
-          apikey: config.anonKey,
-          Authorization: `Bearer ${config.anonKey}`
+  // 1. Direct Supabase REST API (when configured directly)
+  if (config.isConfigured) {
+    try {
+      const res = await fetch(
+        `${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(cleanUser)}&select=*`,
+        {
+          headers: {
+            apikey: config.anonKey,
+            Authorization: `Bearer ${config.anonKey}`
+          }
+        }
+      );
+
+      if (res.ok) {
+        const rows = await res.json();
+        if (Array.isArray(rows) && rows.length > 0) {
+          const userRow = rows[0];
+          if (userRow.password !== password) {
+            return { ok: false, wrongPassword: true, message: "Invalid password. Please check your credentials." };
+          }
+          return {
+            ok: true,
+            user: {
+              username: userRow.username,
+              role: userRow.role || "student",
+              score: Number(userRow.score) || 0,
+              solved: Array.isArray(userRow.solved) ? userRow.solved : [],
+              conceptSolved: Array.isArray(userRow.concept_solved) ? userRow.concept_solved : [],
+              penalties: (typeof userRow.penalties === "object" && userRow.penalties !== null) ? userRow.penalties : {}
+            }
+          };
+        } else {
+          return { ok: false, notFound: true, message: "Account not found in cloud database." };
         }
       }
-    );
-
-    if (!res.ok) {
-      const errText = await res.text();
-      return { ok: false, message: `Supabase login query error: ${errText}` };
+    } catch (err) {
+      console.warn("Direct Supabase login query error:", err);
     }
+  }
 
-    const rows = await res.json();
-    if (!Array.isArray(rows) || rows.length === 0) {
+  // 2. Vercel Serverless API Proxy
+  try {
+    const apiUrl = getApiUrl();
+    const res = await fetch(`${apiUrl}?action=login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: cleanUser, password })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.status === "ok" && data.user) {
+        return { ok: true, user: data.user };
+      }
+    } else if (res.status === 401) {
+      return { ok: false, wrongPassword: true, message: "Invalid password. Please check your credentials." };
+    } else if (res.status === 404) {
       return { ok: false, notFound: true, message: "Account not found in cloud database." };
     }
-
-    const userRow = rows[0];
-    if (userRow.password !== password) {
-      return { ok: false, wrongPassword: true, message: "Invalid password. Please check your credentials." };
-    }
-
-    return {
-      ok: true,
-      user: {
-        username: userRow.username,
-        role: userRow.role || "student",
-        score: Number(userRow.score) || 0,
-        solved: Array.isArray(userRow.solved) ? userRow.solved : [],
-        conceptSolved: Array.isArray(userRow.concept_solved) ? userRow.concept_solved : [],
-        penalties: (typeof userRow.penalties === "object" && userRow.penalties !== null) ? userRow.penalties : {}
-      }
-    };
-  } catch (err) {
-    console.warn("Cloud login network error:", err);
-    return { ok: false, offline: true, message: err.message };
+  } catch (e) {
+    console.warn("Vercel API login proxy error:", e);
   }
+
+  return { ok: false, offline: true };
 }
 
 async function cloudSaveUserProgress(user) {
   if (!user || user.role === "admin") return;
-  const config = getSupabaseConfig();
-  if (!config.isConfigured) return;
+  let config = getSupabaseConfig();
+  if (!config.isConfigured) {
+    config = await autoDiscoverCloudConfig();
+  }
 
   const nowIso = new Date().toISOString();
 
-  // 1. Update lab_users table
-  try {
-    await fetch(`${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(user.username)}`, {
-      method: "PATCH",
-      headers: {
-        apikey: config.anonKey,
-        Authorization: `Bearer ${config.anonKey}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        score: user.score,
-        solved: user.solved,
-        concept_solved: user.conceptSolved || [],
-        penalties: user.penalties || {},
-        updated_at: nowIso
-      })
-    });
-  } catch (e) {
-    console.warn("Cloud progress save error (lab_users):", e);
+  // 1. Direct Supabase REST API
+  if (config.isConfigured) {
+    try {
+      await fetch(`${config.url}/rest/v1/lab_users?username=eq.${encodeURIComponent(user.username)}`, {
+        method: "PATCH",
+        headers: {
+          apikey: config.anonKey,
+          Authorization: `Bearer ${config.anonKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          score: user.score,
+          solved: user.solved,
+          concept_solved: user.conceptSolved || [],
+          penalties: user.penalties || {},
+          updated_at: nowIso
+        })
+      });
+      syncUserScoreToCloud();
+      return;
+    } catch (e) {
+      console.warn("Direct Supabase progress save error (lab_users):", e);
+    }
   }
 
-  // 2. Update leaderboard table
+  // 2. Vercel Serverless API Proxy
   try {
-    await fetch(`${config.url}/rest/v1/leaderboard`, {
+    const apiUrl = getApiUrl();
+    await fetch(`${apiUrl}?action=save_progress`, {
       method: "POST",
-      headers: {
-        apikey: config.anonKey,
-        Authorization: `Bearer ${config.anonKey}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         username: user.username,
         score: user.score,
-        solved_count: user.solved.length,
-        last_active: "Just now",
-        updated_at: nowIso
+        solved: user.solved,
+        conceptSolved: user.conceptSolved || [],
+        penalties: user.penalties || {}
       })
     });
   } catch (e) {
-    console.warn("Cloud progress save error (leaderboard):", e);
+    console.warn("Vercel API progress save error:", e);
   }
 }
 
@@ -1235,8 +1328,7 @@ async function handleLogin(e) {
   }
 
   // 2. Supabase Cloud Database Login
-  const config = getSupabaseConfig();
-  if (config.isConfigured) {
+  if (isCloudApiAvailable()) {
     const submitBtn = document.querySelector("#formLogin button[type='submit']");
     const origText = submitBtn ? submitBtn.innerText : "Sign In";
     if (submitBtn) submitBtn.innerText = "Verifying...";
@@ -1335,8 +1427,7 @@ async function handleSignup(e) {
   }
 
   // 1. Supabase Cloud Signup
-  const config = getSupabaseConfig();
-  if (config.isConfigured) {
+  if (isCloudApiAvailable()) {
     const submitBtn = document.querySelector("#formSignup button[type='submit']");
     const origText = submitBtn ? submitBtn.innerText : "Create Practice Account";
     if (submitBtn) submitBtn.innerText = "Creating Account...";
@@ -1572,7 +1663,7 @@ window.addEventListener("keydown", (e) => {
 });
 
 // Initialize on Load
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   cleanMockData();
 
   const users = getStoredUsers();
@@ -1580,6 +1671,9 @@ window.addEventListener("DOMContentLoaded", () => {
     users["admin"] = { password: "Pa$$w0rd", role: "admin", score: 0, solved: [], conceptSolved: [] };
     saveStoredUsers(users);
   }
+
+  // Auto-discover Supabase credentials if deployed on Vercel
+  await autoDiscoverCloudConfig();
 
   // Pre-fetch cloud leaderboard and update cloud indicator
   updateCloudStatusIndicator();
