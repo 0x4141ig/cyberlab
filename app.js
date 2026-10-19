@@ -669,6 +669,13 @@ function saveCurrentUser() {
   saveStoredUsers(users);
 }
 
+// Supabase Cloud Configuration
+// When you provide your Supabase URL & Anon Key, it syncs directly from all browsers!
+const SUPABASE_CONFIG = {
+  url: window.SUPABASE_URL || "", // e.g. "https://xxxx.supabase.co"
+  anonKey: window.SUPABASE_ANON_KEY || ""
+};
+
 function getApiUrl() {
   if (window.location.hostname.includes("vercel.app") || window.location.hostname === "localhost") {
     return "/api/leaderboard";
@@ -678,6 +685,33 @@ function getApiUrl() {
 
 async function syncUserScoreToCloud() {
   if (!currentUser || currentUser.role === "admin") return;
+
+  // 1. Direct Supabase REST API Sync
+  if (SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+    try {
+      await fetch(`${SUPABASE_CONFIG.url}/rest/v1/leaderboard`, {
+        method: "POST",
+        headers: {
+          apikey: SUPABASE_CONFIG.anonKey,
+          Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates"
+        },
+        body: JSON.stringify({
+          username: currentUser.username.trim(),
+          score: currentUser.score,
+          solved_count: currentUser.solved.length,
+          last_active: "Just now",
+          updated_at: new Date().toISOString()
+        })
+      });
+      return;
+    } catch (e) {
+      console.warn("Direct Supabase sync error:", e);
+    }
+  }
+
+  // 2. Vercel Serverless API Sync
   try {
     const url = getApiUrl();
     await fetch(url, {
@@ -696,6 +730,37 @@ async function syncUserScoreToCloud() {
 }
 
 async function fetchCloudLeaderboard() {
+  // 1. Direct Supabase REST API Query
+  if (SUPABASE_CONFIG.url && SUPABASE_CONFIG.anonKey) {
+    try {
+      const res = await fetch(
+        `${SUPABASE_CONFIG.url}/rest/v1/leaderboard?select=username,score,solved_count,last_active&order=score.desc,solved_count.desc`,
+        {
+          headers: {
+            apikey: SUPABASE_CONFIG.anonKey,
+            Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`
+          }
+        }
+      );
+      if (res.ok) {
+        const rows = await res.json();
+        const list = (rows || []).map((r) => ({
+          username: r.username,
+          score: Number(r.score) || 0,
+          solvedCount: Number(r.solved_count) || 0,
+          lastActive: r.last_active || "Recently"
+        }));
+        if (list.length > 0) {
+          saveLeaderboard(list);
+          return list;
+        }
+      }
+    } catch (e) {
+      console.warn("Direct Supabase fetch error:", e);
+    }
+  }
+
+  // 2. Vercel Serverless API Query
   try {
     const url = getApiUrl();
     const res = await fetch(url);
