@@ -181,11 +181,26 @@ function loadQuestion(idx) {
   elModuleTag.innerText = q.moduleTitle;
   elTaskTitle.innerText = `Task ${q.id}: ${q.title}`;
   elTargetBadge.innerHTML = `<strong>Target:</strong> ${q.target}`;
+
+  // Update Required Command Box
+  const elTaskRequiredCommand = document.getElementById("taskRequiredCommand");
+  if (elTaskRequiredCommand) {
+    elTaskRequiredCommand.innerText = q.solution || "";
+  }
+
   elScenarioText.innerText = q.scenario;
   elTaskText.innerText = q.task;
   elExamTipText.innerText = q.cehExamTip;
   elQuestionIndicator.innerText = `Task ${idx + 1} of ${CEH_QUESTIONS.length}`;
   elPointsPill.innerText = `+${q.points || 100} PTS`;
+
+  // Sync module filter chip if navigating across modules while filtered
+  if (currentFilter !== "all" && q.module.toString() !== currentFilter) {
+    currentFilter = q.module.toString();
+    document.querySelectorAll(".filter-chip").forEach((chip) => {
+      chip.classList.toggle("active", chip.getAttribute("data-module") === currentFilter);
+    });
+  }
 
   // Track active task for student
   if (currentUser && currentUser.role !== "admin") {
@@ -236,21 +251,74 @@ function loadQuestion(idx) {
   renderQuestionGrid();
 }
 
-// Render Question Grid
+// Render Question Grid with Module Separation & Ability to Show All
 function renderQuestionGrid() {
+  if (!elQuestionGrid) return;
   elQuestionGrid.innerHTML = "";
-  CEH_QUESTIONS.forEach((q, idx) => {
-    if (currentFilter !== "all" && q.module.toString() !== currentFilter) {
-      return;
-    }
 
-    const isSolved = currentUser ? currentUser.solved.includes(q.id) : false;
-    const badge = document.createElement("div");
-    badge.className = `q-badge ${idx === currentIndex ? "current" : ""} ${isSolved ? "completed" : ""}`;
-    badge.innerText = q.id;
-    badge.title = `Q${q.id}: ${q.title}`;
-    badge.onclick = () => loadQuestion(idx);
-    elQuestionGrid.appendChild(badge);
+  const modules = [
+    { id: 1, name: "Intro to Ethical Hacking" },
+    { id: 2, name: "Footprinting & Recon" },
+    { id: 3, name: "Scanning Networks" },
+    { id: 4, name: "Enumeration & Information Gathering" },
+    { id: 5, name: "Vulnerability Analysis" }
+  ];
+
+  // If filtered to a specific module, show quick indicator + Show All button
+  if (currentFilter !== "all") {
+    const activeMod = modules.find(m => m.id.toString() === currentFilter);
+    const count = CEH_QUESTIONS.filter(q => q.module.toString() === currentFilter).length;
+
+    const notice = document.createElement("div");
+    notice.className = "grid-filter-notice";
+    notice.innerHTML = `
+      <span>Showing <strong>Module 0${currentFilter}: ${activeMod ? activeMod.name : ''}</strong> (${count} Tasks)</span>
+      <button class="btn-grid-show-all" onclick="setModuleFilter('all')">👁️ Show All Modules (${CEH_QUESTIONS.length} Tasks)</button>
+    `;
+    elQuestionGrid.appendChild(notice);
+  }
+
+  const activeModules = currentFilter === "all"
+    ? modules
+    : modules.filter(m => m.id.toString() === currentFilter);
+
+  activeModules.forEach(mod => {
+    const modQuestions = [];
+    CEH_QUESTIONS.forEach((q, idx) => {
+      if (q.module === mod.id) {
+        modQuestions.push({ q, idx });
+      }
+    });
+
+    if (modQuestions.length === 0) return;
+
+    const row = document.createElement("div");
+    row.className = "module-section-row";
+
+    const header = document.createElement("div");
+    header.className = "module-row-header";
+    header.innerHTML = `
+      <span class="module-row-pill mod-${mod.id}">Mod 0${mod.id}</span>
+      <span class="module-row-name" title="${mod.name}">${mod.name}</span>
+      <span class="module-row-count">(${modQuestions.length})</span>
+    `;
+
+    const badgesContainer = document.createElement("div");
+    badgesContainer.className = "module-row-badges";
+
+    modQuestions.forEach(({ q, idx }) => {
+      const isSolved = currentUser ? currentUser.solved.includes(q.id) : false;
+      const badge = document.createElement("div");
+      badge.className = `q-badge ${idx === currentIndex ? "current" : ""} ${isSolved ? "completed" : ""}`;
+      badge.innerText = q.id;
+      badge.title = `Task ${q.id}: ${q.title}`;
+      badge.onclick = () => loadQuestion(idx);
+      badgesContainer.appendChild(badge);
+    });
+
+    row.appendChild(header);
+    row.appendChild(badgesContainer);
+    elQuestionGrid.appendChild(row);
   });
 }
 

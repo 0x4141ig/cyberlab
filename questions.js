@@ -804,412 +804,906 @@ Nmap done: 1 IP address (1 host up) scanned in 12.35 seconds`,
   },
 
   // ==========================================
-  // MODULE 4: ENUMERATION (NBTSTAT & NETBIOS LABS)
+// ==========================================
+  // MODULE 4: ENUMERATION (CEH v13 Lab 04)
   // ==========================================
   {
     id: 17,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
-    title: "NetBIOS Remote Name Table by IP (nbtstat -A)",
-    difficulty: "Intermediate",
+    title: "NetBIOS Remote Machine Name Table (nbtstat -a)",
+    difficulty: "Beginner",
     points: 100,
-    target: "10.10.1.22 (Windows Server 2022)",
+    target: "10.10.1.11 (Windows 11)",
     prompt: "C:\\Users\\Administrator>",
-    scenario: "Following network port scanning, ethical hackers perform NetBIOS enumeration on ports 137 (UDP) and 139 (TCP). In Windows, 'nbtstat' is the premier built-in command to query remote NetBIOS name tables.",
-    task: "Use nbtstat with capital '-A' to enumerate the remote NetBIOS name table of target IP 10.10.1.22.",
-    solution: "nbtstat -A 10.10.1.22",
+    scenario: "As described in CEH Lab 1 (Task 1), NetBIOS enumeration allows penetration testers to extract computer names, domain workgroups, and service record types from remote Windows hosts over TCP/IP.",
+    task: "Run the nbtstat command with the -a parameter to resolve and display the NetBIOS name table of remote Windows 11 target 10.10.1.11.",
+    solution: "nbtstat -a 10.10.1.11",
     accepted: [
-      /^nbtstat\s+-A\s+10\.10\.1\.22$/,
-      /^nbtstat\s+-a\s+10\.10\.1\.22$/
+      /^nbtstat\s+-a\s+10\.10\.1\.11$/,
+      /^nbtstat\s+-A\s+10\.10\.1\.11$/
     ],
-    hint: "Use 'nbtstat -A 10.10.1.22'. Remember: capital '-A' queries by IP address, while lowercase '-a' requires a hostname.",
+    hint: "Use 'nbtstat -a 10.10.1.11' to view the NetBIOS name table for the remote computer.",
     diagnostics: [
-      { check: (cmd) => !cmd.toLowerCase().startsWith("nbtstat"), msg: "Use the Windows built-in 'nbtstat' utility." },
-      { check: (cmd) => !cmd.includes("-A") && !cmd.includes("-a"), msg: "Use '-A' (capital) followed by the remote IP address." },
-      { check: (cmd) => !cmd.includes("10.10.1.22"), msg: "Target IP 10.10.1.22 is missing." }
+      { check: (cmd) => !cmd.startsWith("nbtstat"), msg: "Use the Windows 'nbtstat' utility." },
+      { check: (cmd) => !cmd.includes("-a") && !cmd.includes("-A"), msg: "Include the '-a' switch to query the remote NetBIOS table." },
+      { check: (cmd) => !cmd.includes("10.10.1.11"), msg: "Target the Windows 11 machine at 10.10.1.11." }
     ],
-    tutorNotes: "Teaching Talking Point: This is a classic CEH exam question! Teach students the difference: 'nbtstat -a <ComputerName>' vs 'nbtstat -A <IPAddress>'. Highlight the NetBIOS suffix '<20>' under type UNIQUE, which proves the Server Service (File and Print Sharing) is active.",
-    highlightText: "WIN-SERVER2022 <20>  UNIQUE      Registered",
+    tutorNotes: "Teaching Point: Explain NetBIOS suffix types. <00> denotes Workstation or Domain name, <20> denotes File Server (Server service enabled), and <1E> is Browser Service election.",
+    highlightText: "WINDOWS11      <20>  UNIQUE      Registered",
     analysisQuestion: {
-      prompt: "In the NetBIOS name table, what does the hex suffix '<20>' next to 'WIN-SERVER2022' reveal to an ethical hacker?",
+      prompt: "What does the '<20>' service suffix in the NetBIOS name table output indicate?",
       options: [
-        { text: "The Server Service is running, confirming file and printer sharing is enabled", correct: true },
-        { text: "The machine is a primary DNS server", correct: false },
-        { text: "The host has 20 active user sessions", correct: false },
-        { text: "The machine is running a web proxy", correct: false }
+        { text: "The Server Service (File and Printer Sharing) is active and running on the target", correct: true },
+        { text: "The machine is a Domain Controller", correct: false },
+        { text: "The system is running an unauthenticated FTP daemon", correct: false },
+        { text: "Port 20 is being used for active FTP data transfers", correct: false }
       ],
-      explanation: "NetBIOS names are 16 bytes: 15 for the name and the 16th byte is the hex suffix. <00> = Workstation service, <20> = Server service (File/Print sharing), <1B> = Domain Master Browser, <1D> = Master Browser."
+      explanation: "In NetBIOS naming conventions, <20> represents the Server service, indicating that Windows file sharing (SMB) is actively enabled and can be enumerated."
     },
-    output: `       NetBIOS Remote Machine Name Table
+    output: `NetBIOS Remote Machine Name Table
 
        Name               Type         Status
     ---------------------------------------------
-    WIN-SERVER2022 <00>  UNIQUE      Registered
-    CEH            <00>  GROUP       Registered
-    WIN-SERVER2022 <20>  UNIQUE      Registered
-    CEH            <1E>  GROUP       Registered
-    CEH            <1D>  UNIQUE      Registered
+    WINDOWS11      <00>  UNIQUE      Registered
+    CORP           <00>  GROUP       Registered
+    WINDOWS11      <20>  UNIQUE      Registered
+    CORP           <1E>  GROUP       Registered
+    CORP           <1D>  UNIQUE      Registered
     ..__MSBROWSE__.<01>  GROUP       Registered
 
-    MAC Address = 00-0C-29-8E-4F-1A`,
-    cehExamTip: "Exam Alert: CEH loves asking about nbtstat parameters: '-a <hostname>' requires a computer name, while '-A <IP>' requires an IP address. Suffix <20> denotes File/Print Sharing (Server Service), and <00> denotes Workstation/Domain name."
+    MAC Address = 00-0C-29-84-3A-1B`,
+    cehExamTip: "Exam Alert: NetBIOS suffix codes to memorize: <00> Workstation Service, <03> Messenger Service, <20> Server Service, <1B> Domain Master Browser."
   },
   {
     id: 18,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
     title: "NetBIOS Remote Name Cache (nbtstat -c)",
-    difficulty: "Intermediate",
+    difficulty: "Beginner",
     points: 100,
     target: "Local NetBIOS Cache",
     prompt: "C:\\Users\\Administrator>",
-    scenario: "Attackers inspect the local NetBIOS name cache to identify recently resolved hostnames and IP addresses of sensitive internal targets (like domain controllers and file servers) without generating network noise.",
-    task: "Display the contents of the local NetBIOS Remote Cache Name Table using nbtstat.",
+    scenario: "To inspect recently resolved NetBIOS names without generating noisy network broadcasts, ethical hackers check the local NetBIOS cache.",
+    task: "Execute the nbtstat command with the -c parameter to list the contents of the NetBIOS name cache and resolved IP addresses.",
     solution: "nbtstat -c",
     accepted: [
       /^nbtstat\s+-c$/
     ],
-    hint: "Type 'nbtstat -c' to view the NetBIOS name cache table.",
+    hint: "Execute 'nbtstat -c' to dump the cached NetBIOS names.",
     diagnostics: [
-      { check: (cmd) => !cmd.startsWith("nbtstat"), msg: "Use the 'nbtstat' command." },
-      { check: (cmd) => !cmd.includes("-c"), msg: "Use the '-c' (cache) parameter." }
+      { check: (cmd) => !cmd.startsWith("nbtstat"), msg: "Use 'nbtstat' command." },
+      { check: (cmd) => !cmd.includes("-c"), msg: "Use the '-c' switch for cache listing." }
     ],
-    tutorNotes: "Teaching Talking Point: Show students: 'DC01 <20> UNIQUE 10.10.1.2'. Point out how cache snooping allows ethical hackers to identify the Domain Controller (10.10.1.2) without running any active port scans across the subnet.",
-    highlightText: "DC01           <20>  UNIQUE          10.10.1.2",
+    tutorNotes: "Teaching Point: NetBIOS cache stores name-to-IP resolutions temporarily. Show students how recently contacted hosts stay in cache for fast lookup.",
+    highlightText: "10.10.1.11",
     analysisQuestion: {
-      prompt: "What critical internal infrastructure server was discovered in the NetBIOS cache without sending packets across the network?",
+      prompt: "What information does the 'nbtstat -c' command extract from the local system?",
       options: [
-        { text: "Primary Domain Controller (DC01 @ 10.10.1.2)", correct: true },
-        { text: "External Cloud Firewall", correct: false },
-        { text: "Public DNS Root Server", correct: false },
-        { text: "Guest Wi-Fi Gateway", correct: false }
+        { text: "The NetBIOS name cache containing remote machine names and their resolved IP addresses", correct: true },
+        { text: "The ARP table of physical MAC addresses", correct: false },
+        { text: "The active TCP listening sockets", correct: false },
+        { text: "The DNS server root hints", correct: false }
       ],
-      explanation: "'nbtstat -c' displays recently resolved NetBIOS names stored in RAM, uncovering internal servers like 'DC01' (10.10.1.2) passively."
+      explanation: "The -c switch lists the contents of the NetBIOS name cache, showing the table of NetBIOS names and their resolved IP addresses."
     },
-    output: `Local Area Connection:
-Node IpAddress: [10.10.1.50] Scope Id: []
+    output: `Ethernet0:
+Node IpAddress: [10.10.1.19] Scope Id: []
 
                   NetBIOS Remote Cache Name Table
 
-       Name              Type       Host Address    Life [sec]
+        Name              Type       Host Address    Life [sec]
     ------------------------------------------------------------
-    DC01           <20>  UNIQUE          10.10.1.2          240
-    FILESERVER     <20>  UNIQUE         10.10.1.20          300
-    WIN-SERVER2022 <20>  UNIQUE         10.10.1.22          360`,
-    cehExamTip: "Exam Alert: 'nbtstat -c' displays the NetBIOS name cache. To purge and reload this cache from the LMHOSTS file, the command is 'nbtstat -R' (capital R). To purge and re-register names, use 'nbtstat -RR'."
+    WINDOWS11      <20>  UNIQUE          10.10.1.11         540
+    CORP           <00>  GROUP           10.10.1.11         540
+    DC-WIN2022     <00>  UNIQUE          10.10.1.22         580`,
+    cehExamTip: "Exam Alert: 'nbtstat -c' displays the NetBIOS name cache. 'nbtstat -R' purges and reloads the cache from the LMHOSTS file."
   },
   {
     id: 19,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
-    title: "Local NetBIOS Name Table (nbtstat -n)",
+    title: "NetBIOS Shared Drive Mapping (net use)",
     difficulty: "Beginner",
     points: 100,
-    target: "Local Workstation",
+    target: "10.10.1.19 (Windows Server 2019)",
     prompt: "C:\\Users\\Administrator>",
-    scenario: "To audit what NetBIOS services and workgroups your current system is broadcasting to the local network, you can dump your own local NetBIOS table.",
-    task: "Use nbtstat to display the local machine's NetBIOS names and registered workgroup.",
-    solution: "nbtstat -n",
+    scenario: "As covered in CEH Lab 1 (Step 60), the 'net use' command connects a computer to, or disconnects from, shared resources and displays active remote network connections.",
+    task: "Run the 'net use' command to display all currently mapped shares, local drive letters, and remote network connection states.",
+    solution: "net use",
     accepted: [
-      /^nbtstat\s+-n$/
+      /^net\s+use$/
     ],
-    hint: "Type 'nbtstat -n' to display names registered locally.",
+    hint: "Type 'net use' and press Enter to list mapped drives and active shares.",
     diagnostics: [
-      { check: (cmd) => !cmd.startsWith("nbtstat"), msg: "Use 'nbtstat'." },
-      { check: (cmd) => !cmd.includes("-n"), msg: "Use the '-n' (names) option." }
+      { check: (cmd) => !cmd.startsWith("net"), msg: "Use the Windows 'net' utility." },
+      { check: (cmd) => !cmd.includes("use"), msg: "Use the 'use' subcommand." }
     ],
-    tutorNotes: "Teaching Talking Point: Show students: '<00> GROUP Registered'. Explain that <00> with type GROUP always represents the Domain or Workgroup name, whereas <00> with type UNIQUE is the computer hostname.",
-    highlightText: "WORKGROUP      <00>  GROUP       Registered",
+    tutorNotes: "Teaching Point: Net use is a vital post-enumeration tool. Attackers establish null sessions via 'net use \\target\ipc$ "" /u:""' to dump SAM accounts without valid credentials.",
+    highlightText: "\\10.10.1.19\CEHv13",
     analysisQuestion: {
-      prompt: "In the local NetBIOS name table, what does the entry 'WORKGROUP <00> GROUP' represent?",
+      prompt: "Based on the 'net use' output, what shared network folder is actively mapped to local drive Z:?",
       options: [
-        { text: "The local Workgroup or Domain name that this host is joined to", correct: true },
-        { text: "A list of banned IP addresses", correct: false },
-        { text: "The network router's MAC address", correct: false },
-        { text: "A group of active malware connections", correct: false }
+        { text: "\\10.10.1.19\CEHv13", correct: true },
+        { text: "\\10.10.1.22\SYSVOL", correct: false },
+        { text: "\\10.10.1.11\ADMIN$", correct: false },
+        { text: "\\10.10.1.5\IPC$", correct: false }
       ],
-      explanation: "A NetBIOS <00> suffix with type GROUP indicates the Domain or Workgroup name. A <00> suffix with type UNIQUE indicates the individual computer hostname."
+      explanation: "The net use output shows local drive Z: connected to remote network share \\10.10.1.19\CEHv13 over the Microsoft Windows Network."
     },
-    output: `Local Area Connection:
-Node IpAddress: [10.10.1.50] Scope Id: []
-
-                NetBIOS Local Name Table
-
-       Name               Type         Status
-    ---------------------------------------------
-    ADMIN-PC       <00>  UNIQUE      Registered
-    ADMIN-PC       <20>  UNIQUE      Registered
-    WORKGROUP      <00>  GROUP       Registered
-    WORKGROUP      <1E>  GROUP       Registered`,
-    cehExamTip: "Exam Alert: 'nbtstat -n' lists names that were registered locally by applications such as the Workstation service, Server service, and Messenger service."
+    output: `Status       Local     Remote                    Network
+-------------------------------------------------------------------------------
+OK           Z:        \\10.10.1.19\CEHv13       Microsoft Windows Network
+The command completed successfully.`,
+    cehExamTip: "Exam Alert: Net use connects to SMB/CIFS shares over TCP port 445 (or NetBIOS port 139). Connecting to IPC$ creates an Inter-Process Communication pipe."
   },
   {
     id: 20,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
-    title: "NetBIOS Connection Table by IP (nbtstat -s)",
+    title: "SNMPv1 Community String MIB Walk",
     difficulty: "Intermediate",
     points: 100,
-    target: "Local Connection Table",
-    prompt: "C:\\Users\\Administrator>",
-    scenario: "Monitoring active NetBIOS sessions helps identify active SMB connections, open shares, and network file transfers in progress.",
-    task: "Display the NetBIOS connection session table listing remote hosts by IP address using nbtstat.",
-    solution: "nbtstat -s",
+    target: "10.10.1.22 (Windows Server 2022)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 2 (Task 1), penetration testers use SnmpWalk to query the SNMP agent running on target 10.10.1.22. SNMPv1 transmits community strings in cleartext and provides detailed device telemetry.",
+    task: "Execute snmpwalk using SNMP version 1 (-v1) and community string 'public' (-c public) against target 10.10.1.22.",
+    solution: "snmpwalk -v1 -c public 10.10.1.22",
     accepted: [
-      /^nbtstat\s+-s$/,
-      /^nbtstat\s+-S$/
+      /^snmpwalk\s+-v\s*1\s+-c\s+public\s+10\.10\.1\.22$/,
+      /^snmpwalk\s+-v1\s+-c\s+public\s+10\.10\.1\.22$/
     ],
-    hint: "Use 'nbtstat -s' to list NetBIOS sessions by IP address.",
+    hint: "Use 'snmpwalk -v1 -c public 10.10.1.22' to perform an SNMPv1 MIB walk.",
     diagnostics: [
-      { check: (cmd) => !cmd.startsWith("nbtstat"), msg: "Use 'nbtstat'." },
-      { check: (cmd) => !cmd.toLowerCase().includes("-s"), msg: "Use '-s' (or '-S') to view the sessions connection table." }
+      { check: (cmd) => !cmd.startsWith("snmpwalk"), msg: "Use the 'snmpwalk' command-line utility." },
+      { check: (cmd) => !cmd.includes("-v1") && !cmd.includes("-v 1"), msg: "Specify SNMP version 1 using '-v1'." },
+      { check: (cmd) => !cmd.includes("-c public"), msg: "Set community string to 'public' with '-c public'." },
+      { check: (cmd) => !cmd.includes("10.10.1.22"), msg: "Target IP must be 10.10.1.22." }
     ],
-    tutorNotes: "Teaching Talking Point: Explain the difference between '-s' and '-S': '-s' lists remote hosts by IP address; capital '-S' attempts to resolve remote IPs to NetBIOS computer names.",
-    highlightText: "10.10.1.22:139",
+    tutorNotes: "Teaching Point: Emphasize Question 4.2.1.1 from the manual: '-c' sets the community string. Show how sysDescr reveals the Windows kernel build version (Build 20348).",
+    highlightText: "DC-WIN2022.CEH.COM",
     analysisQuestion: {
-      prompt: "Which legacy NetBIOS transport port is actively connected to remote host 10.10.1.22?",
+      prompt: "According to the CEH Lab Manual, which command-line option in SnmpWalk sets the community string?",
       options: [
-        { text: "TCP Port 139 (NetBIOS Session Service)", correct: true },
-        { text: "UDP Port 137 (NetBIOS Name Service)", correct: false },
-        { text: "UDP Port 138 (NetBIOS Datagram Service)", correct: false },
-        { text: "TCP Port 22 (SSH)", correct: false }
+        { text: "-c (e.g. -c public)", correct: true },
+        { text: "-v (specifies version)", correct: false },
+        { text: "-p (specifies port)", correct: false },
+        { text: "-s (specifies socket)", correct: false }
       ],
-      explanation: "NetBIOS over TCP/IP uses 3 ports: UDP 137 (Name Service), UDP 138 (Datagram Service), and TCP 139 (Session Service). Direct-hosted SMB uses TCP 445."
+      explanation: "In SnmpWalk, -c sets the community string (acting like a cleartext password), while -v specifies the SNMP version number (1, 2c, or 3)."
     },
-    output: `Local Area Connection:
-Node IpAddress: [10.10.1.50] Scope Id: []
-
-                  NetBIOS Connection Table
-
-    Local Name             State    In/Out  Remote Host           Input   Output
-    --------------------------------------------------------------------------------
-    ADMIN-PC       <00>  Connected  Out     10.10.1.22:139        18KB    12KB
-    ADMIN-PC       <00>  Connected  Out     10.10.1.2:139         4KB     2KB`,
-    cehExamTip: "Exam Alert: Memorize the NetBT port numbers: UDP 137 = NetBIOS Name Service (NBNS), UDP 138 = NetBIOS Datagram Service, TCP 139 = NetBIOS Session Service."
+    output: `SNMPv2-MIB::sysDescr.0 = STRING: Hardware: Intel64 Family 6 Model 85 Stepping 7 - Software: Windows Version 10.0 (Build 20348 Multiprocessor Free)
+SNMPv2-MIB::sysObjectID.0 = OID: SNMPv2-SMI::enterprises.311.1.1.3.1.2
+DISMAN-EVENT-MIB::sysUpTimeInstance = Timeticks: (2841920) 7:53:39.20
+SNMPv2-MIB::sysContact.0 = STRING: admin@certifiedhacker.com
+SNMPv2-MIB::sysName.0 = STRING: DC-WIN2022.CEH.COM
+SNMPv2-MIB::sysLocation.0 = STRING: Primary Data Center Rack 4
+IP-MIB::ipAdEntAddr.10.10.1.22 = IpAddress: 10.10.1.22
+IP-MIB::ipAdEntNetMask.10.10.1.22 = IpAddress: 255.255.255.0`,
+    cehExamTip: "Exam Alert: SNMP operates on UDP port 161 (queries) and UDP port 162 (SNMP Traps). Default community strings: 'public' (read-only) and 'private' (read-write)."
   },
   {
     id: 21,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
-    title: "Metasploit: Loading SYN Port Scanner Module",
+    title: "SNMPv2c Advanced MIB Walking",
     difficulty: "Intermediate",
     points: 100,
-    target: "Metasploit Console",
-    prompt: "msf6 >",
-    scenario: "In Lab 5 of your network scanning document, you transition from standalone Nmap to Metasploit auxiliary scanning modules.",
-    task: "Load the auxiliary SYN port scanner module inside Metasploit console.",
-    solution: "use auxiliary/scanner/portscan/syn",
+    target: "10.10.1.22 (Windows Server 2022)",
+    prompt: "root@parrot:~#",
+    scenario: "As demonstrated in Step 84 of CEH Lab 2, SNMPv2c adds support for 64-bit counters and bulk data transfers, allowing testers to extract running processes, installed software, and storage devices.",
+    task: "Perform an SNMPv2c enumeration scan against 10.10.1.22 using community string 'public'.",
+    solution: "snmpwalk -v2c -c public 10.10.1.22",
     accepted: [
-      /^use\s+auxiliary\/scanner\/portscan\/syn$/,
-      /^use\s+scanner\/portscan\/syn$/
+      /^snmpwalk\s+-v\s*2c\s+-c\s+public\s+10\.10\.1\.22$/,
+      /^snmpwalk\s+-v2c\s+-c\s+public\s+10\.10\.1\.22$/
     ],
-    hint: "Type 'use auxiliary/scanner/portscan/syn'.",
+    hint: "Execute 'snmpwalk -v2c -c public 10.10.1.22' to enumerate SNMPv2c OIDs.",
     diagnostics: [
-      { check: (cmd) => !cmd.startsWith("use"), msg: "In Metasploit, use the 'use' command to load an auxiliary module." },
-      { check: (cmd) => !cmd.includes("auxiliary/scanner/portscan/syn"), msg: "Module path must be 'auxiliary/scanner/portscan/syn'." }
+      { check: (cmd) => !cmd.includes("-v2c") && !cmd.includes("-v 2c"), msg: "Specify SNMP version 2c using '-v2c' or '-v 2c'." },
+      { check: (cmd) => !cmd.includes("-c public"), msg: "Set the community string to 'public'." }
     ],
-    tutorNotes: "Teaching Talking Point: Show students the prompt change: from 'msf6 >' to 'msf6 auxiliary(scanner/portscan/syn) >'. Explain that auxiliary modules never deploy payloads.",
-    highlightText: "msf6 auxiliary(scanner/portscan/syn) >",
+    tutorNotes: "Teaching Point: Point out OID 1.3.6.1.2.1.25.4.2.1.2 (hrSWRunName) in the output. Attackers use this to identify running antivirus, EDR agents, or vulnerable services.",
+    highlightText: "hrSWRunName",
     analysisQuestion: {
-      prompt: "What distinguishes a Metasploit 'auxiliary' module from an 'exploit' module in penetration testing?",
+      prompt: "What critical system information does SNMP MIB walking reveal to an attacker?",
       options: [
-        { text: "Auxiliary modules perform scanning, fuzzing, and discovery without deploying a payload", correct: true },
-        { text: "Auxiliary modules grant interactive meterpreter root access", correct: false },
-        { text: "Auxiliary modules are only written in Python", correct: false },
-        { text: "Auxiliary modules permanently erase hard drives", correct: false }
+        { text: "Running processes, storage drive labels, network routing tables, and user accounts", correct: true },
+        { text: "Encrypted Kerberos TGT tickets", correct: false },
+        { text: "BGP route maps from autonomous systems", correct: false },
+        { text: "SSL private keys stored in the Windows cert store", correct: false }
       ],
-      explanation: "Auxiliary modules in Metasploit perform supporting actions: port scanning, brute-forcing, service fingerprinting, and denial of service. They do not attach or deliver payloads."
+      explanation: "SNMP MIB trees contain comprehensive host resources, including running software (hrSWRun), storage volumes (hrStorage), network interfaces (ifDescr), and system variables."
     },
-    output: `[+] Module loaded: auxiliary/scanner/portscan/syn
-msf6 auxiliary(scanner/portscan/syn) >`,
-    cehExamTip: "Exam Alert: Metasploit auxiliary modules are used for scanning, discovery, fingerprinting, and denial of service. Unlike exploits, auxiliary modules do NOT drop a payload on the target."
+    output: `HOST-RESOURCES-MIB::hrSystemUptime.0 = Timeticks: (2842100) 7:53:41.00
+HOST-RESOURCES-MIB::hrStorageDescr.1 = STRING: C:\\ Label:System  Serial Number 4A8F21
+HOST-RESOURCES-MIB::hrStorageSize.1 = INTEGER: 15728639
+HOST-RESOURCES-MIB::hrStorageUsed.1 = INTEGER: 7842190
+HOST-RESOURCES-MIB::hrSWRunName.1 = STRING: "System Idle Process"
+HOST-RESOURCES-MIB::hrSWRunName.4 = STRING: "System"
+HOST-RESOURCES-MIB::hrSWRunName.512 = STRING: "lsass.exe"
+HOST-RESOURCES-MIB::hrSWRunName.820 = STRING: "services.exe"
+HOST-RESOURCES-MIB::hrSWRunName.1240 = STRING: "spoolsv.exe"`,
+    cehExamTip: "Exam Alert: SNMPv1 and SNMPv2c send community strings in unencrypted plaintext. Only SNMPv3 provides confidentiality (encryption) and message integrity."
   },
   {
     id: 22,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
-    title: "Metasploit: SMB Version Enumeration Module",
+    title: "LDAP RootDSE Directory Enumeration",
     difficulty: "Intermediate",
     points: 100,
-    target: "Metasploit Console",
-    prompt: "msf6 >",
-    scenario: "As covered in Task 1 of Lab 5, once open port 445 is found, ethical hackers load the SMB version auxiliary scanner to pinpoint the exact operating system build.",
-    task: "Load the Metasploit auxiliary module used to discover SMB versions.",
-    solution: "use auxiliary/scanner/smb/smb_version",
+    target: "10.10.1.22 (Port 389)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 3, Active Directory Explorer connects to Active Directory via LDAP on port 389. From the Linux command line, Nmap's 'ldap-rootdse' script enumerates the naming contexts and Domain Controller FQDN.",
+    task: "Use Nmap on port 389 with the 'ldap-rootdse' script to enumerate the Active Directory domain naming contexts on target 10.10.1.22.",
+    solution: "nmap -p 389 --script ldap-rootdse 10.10.1.22",
     accepted: [
-      /^use\s+auxiliary\/scanner\/smb\/smb_version$/,
-      /^use\s+scanner\/smb\/smb_version$/
+      /^nmap\s+-p\s*389\s+--script\s+ldap-rootdse\s+10\.10\.1\.22$/,
+      /^nmap\s+--script\s+ldap-rootdse\s+-p\s*389\s+10\.10\.1\.22$/
     ],
-    hint: "Type 'use auxiliary/scanner/smb/smb_version'.",
+    hint: "Run 'nmap -p 389 --script ldap-rootdse 10.10.1.22' to discover Active Directory domain naming contexts.",
     diagnostics: [
-      { check: (cmd) => !cmd.startsWith("use"), msg: "Use the 'use' keyword." },
-      { check: (cmd) => !cmd.includes("smb_version"), msg: "Module name is 'auxiliary/scanner/smb/smb_version'." }
+      { check: (cmd) => !cmd.includes("389"), msg: "Specify LDAP port 389 using '-p 389'." },
+      { check: (cmd) => !cmd.includes("ldap-rootdse"), msg: "Specify the '--script ldap-rootdse' NSE script." }
     ],
-    tutorNotes: "Teaching Talking Point: Reference Question 3.5.1.1 from the class lab docx! Metasploit parameters: 'set RHOSTS 10.10.1.5-23'. Emphasize that SMB discovery determines if EternalBlue is applicable.",
-    highlightText: "msf6 auxiliary(scanner/smb/smb_version) >",
+    tutorNotes: "Teaching Point: In CEH Lab 3 Question 4.3.1.1, students identify the Domain Controller machine IP. RootDSE reveals defaultNamingContext: DC=CEH,DC=com and dnsHostName: DC-WIN2022.CEH.com.",
+    highlightText: "defaultNamingContext: DC=CEH,DC=com",
     analysisQuestion: {
-      prompt: "According to CEH Question 3.5.1.1 in your class document, how do you set the target range for this module to scan hosts 5 through 23?",
+      prompt: "What is the primary LDAP base distinguished name (naming context) discovered on the target Domain Controller?",
       options: [
-        { text: "set RHOSTS 10.10.1.5-23", correct: true },
-        { text: "target 10.10.1.5 to 23", correct: false },
-        { text: "set IP 10.10.1.5:23", correct: false },
-        { text: "scan --range 5-23", correct: false }
+        { text: "DC=CEH,DC=com", correct: true },
+        { text: "CN=Users,DC=Windows,DC=local", correct: false },
+        { text: "OU=Domain Controllers,DC=org", correct: false },
+        { text: "DC=corp,DC=internal", correct: false }
       ],
-      explanation: "In Metasploit auxiliary modules, the remote targets parameter is 'RHOSTS', which accepts hyphenated ranges like 'set RHOSTS 10.10.1.5-23'."
+      explanation: "The LDAP rootDSE response specifies 'defaultNamingContext: DC=CEH,DC=com', defining the root partition of the target Active Directory domain."
     },
-    output: `[+] Module loaded: auxiliary/scanner/smb/smb_version
-msf6 auxiliary(scanner/smb/smb_version) >`,
-    cehExamTip: "Exam Alert: Lab Question 3.5.1.1 from your doc asks about setting RHOSTS for this exact module: 'set RHOSTS 10.10.1.5-23'. Metasploit supports single IPs, CIDR blocks (10.10.1.0/24), and hyphenated IP ranges."
+    output: `Starting Nmap 7.94 ( https://nmap.org ) at 2026-10-19 14:10 UTC
+Nmap scan report for 10.10.1.22
+Host is up (0.00041s latency).
+
+PORT    STATE SERVICE
+389/tcp open  ldap
+| ldap-rootdse: 
+|   currentTime: 20261019141012.0Z
+|   subschemaSubentry: CN=Aggregate,CN=Schema,CN=Configuration,DC=CEH,DC=com
+|   dsServiceName: CN=NTDS Settings,CN=DC-WIN2022,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration,DC=CEH,DC=com
+|   namingContexts: DC=CEH,DC=com
+|   namingContexts: CN=Configuration,DC=CEH,DC=com
+|   namingContexts: CN=Schema,CN=Configuration,DC=CEH,DC=com
+|   defaultNamingContext: DC=CEH,DC=com
+|   dnsHostName: DC-WIN2022.CEH.com
+|_  serverName: CN=DC-WIN2022,CN=Servers,CN=Default-First-Site-Name,CN=Sites,CN=Configuration,DC=CEH,DC=com
+
+Nmap done: 1 IP address (1 host up) scanned in 0.28 seconds`,
+    cehExamTip: "Exam Alert: LDAP operates on TCP/UDP port 389. LDAPS (LDAP over SSL) uses TCP port 636. Global Catalog queries use port 3268 (LDAP) and 3269 (LDAPS)."
   },
   {
     id: 23,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
-    title: "User Enumeration via enum4linux",
-    difficulty: "Intermediate",
+    title: "NFS Service & Port 2049 Discovery",
+    difficulty: "Beginner",
     points: 100,
-    target: "10.10.1.22 (Windows/Samba)",
+    target: "10.10.1.19 (Windows Server 2019)",
     prompt: "root@parrot:~#",
-    scenario: "Enumeration extracts active user accounts, group memberships, and share paths from the target. In CEH Module 4, enum4linux is the premier tool for Windows and Samba enumeration.",
-    task: "Use enum4linux to enumerate all user accounts (-U) from target 10.10.1.22.",
-    solution: "enum4linux -U 10.10.1.22",
+    scenario: "In CEH Lab 4 (Task 1, Step 140), after enabling the Network File System (NFS) role on Windows Server 2019, the ethical hacker scans port 2049 to verify that the NFS daemon is actively listening.",
+    task: "Scan port 2049 on target 10.10.1.19 using Nmap to verify that the NFS service is open.",
+    solution: "nmap -p 2049 10.10.1.19",
     accepted: [
-      /^enum4linux\s+-U\s+10\.10\.1\.22$/,
-      /^enum4linux\s+-a\s+10\.10\.1\.22$/,
-      /^enum4linux\s+10\.10\.1\.22\s+-U$/
+      /^nmap\s+-p\s*2049\s+10\.10\.1\.19$/,
+      /^nmap\s+10\.10\.1\.19\s+-p\s*2049$/
     ],
-    hint: "Type 'enum4linux -U 10.10.1.22' to enumerate user accounts.",
+    hint: "Run 'nmap -p 2049 10.10.1.19' to test the NFS port.",
     diagnostics: [
-      { check: (cmd) => !cmd.startsWith("enum4linux"), msg: "Use the 'enum4linux' tool." },
-      { check: (cmd) => !cmd.includes("-U") && !cmd.includes("-a"), msg: "Use the '-U' flag to specifically enumerate users (or '-a' for all simple enumeration)." },
-      { check: (cmd) => !cmd.includes("10.10.1.22"), msg: "Target IP 10.10.1.22 missing." }
+      { check: (cmd) => !cmd.includes("2049"), msg: "Specify NFS port 2049 with '-p 2049'." },
+      { check: (cmd) => !cmd.includes("10.10.1.19"), msg: "Target the Windows Server 2019 machine at 10.10.1.19." }
     ],
-    tutorNotes: "Teaching Talking Point: Show students: 'user:[Administrator] rid:[0x1f4]'. Explain hex 0x1f4 = decimal 500. This RID proves it is the built-in Windows admin even if the account was renamed.",
-    highlightText: "user:[Administrator] rid:[0x1f4]",
+    tutorNotes: "Teaching Point: Address Question 4.4.1.1 from the lab manual: 'Find the port used by the NFS service on 10.10.1.19' -> Answer: 2049.",
+    highlightText: "2049/tcp open  nfs",
     analysisQuestion: {
-      prompt: "In Windows Relative Identifiers (RID), what does RID 0x1f4 (Decimal 500) always identify?",
+      prompt: "According to CEH Question 4.4.1.1, what port is standardly used by the Network File System (NFS) service?",
       options: [
-        { text: "The built-in local or domain Administrator account", correct: true },
-        { text: "The Guest account", correct: false },
-        { text: "A temporary service account", correct: false },
-        { text: "An unprivileged remote desktop user", correct: false }
+        { text: "Port 2049", correct: true },
+        { text: "Port 111", correct: false },
+        { text: "Port 445", correct: false },
+        { text: "Port 139", correct: false }
       ],
-      explanation: "Windows security accounts end in a RID. RID 500 is reserved for the built-in Administrator, while RID 501 is the Guest account. Attackers use RID cycling to enumerate users."
+      explanation: "Port 2049 is the standardized TCP/UDP port for Network File System (NFS) communication."
     },
-    output: `Starting enum4linux v0.9.1 ( http://labs.portcullis.co.uk/application/enum4linux/ ) on Sun Oct 18 22:58:12 2026
+    output: `Starting Nmap 7.94 ( https://nmap.org ) at 2026-10-19 14:12 UTC
+Nmap scan report for 10.10.1.19
+Host is up (0.00045s latency).
 
- ========================== 
-|    Users on 10.10.1.22   |
- ========================== 
-[+] Enumerating users using SID S-1-5-21-28947192-19284719-2918471
-user:[Administrator] rid:[0x1f4]
-user:[Guest] rid:[0x1f5]
-user:[krbtgt] rid:[0x1f6]
-user:[jdoe] rid:[0x450]
-user:[sarah_admin] rid:[0x451]
-user:[backup_service] rid:[0x452]
+PORT     STATE SERVICE
+2049/tcp open  nfs
+MAC Address: 00:0C:29:91:EE:54 (VMware)
 
-[+] Got domain users via RPC!`,
-    cehExamTip: "Exam Alert: Look at RID 0x1f4 (Hex 0x1f4 = Decimal 500). In Windows, the built-in Administrator account ALWAYS has RID 500, and Guest has RID 501. Attackers use RID cycling to uncover usernames even if the administrator was renamed."
+Nmap done: 1 IP address (1 host up) scanned in 0.18 seconds`,
+    cehExamTip: "Exam Alert: Port 2049 = NFS (Network File System). Port 111 = rpcbind / portmapper, used by clients to locate RPC-based services like NFS mountd."
   },
   {
     id: 24,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
-    title: "SNMP MIB Walking with Community String",
-    difficulty: "Advanced",
+    title: "NFS Mountpoint Enumeration (RPCScan)",
+    difficulty: "Intermediate",
     points: 100,
-    target: "10.10.1.22 (UDP 161)",
+    target: "10.10.1.19 (RPC Portmapper 111)",
     prompt: "root@parrot:~#",
-    scenario: "Simple Network Management Protocol (SNMP) using default community strings like 'public' allows unauthorized remote querying of hardware, software, and network configuration.",
-    task: "Perform an SNMP walk on 10.10.1.22 using SNMP version 2c (-v 2c) and community string 'public' (-c public).",
-    solution: "snmpwalk -v 2c -c public 10.10.1.22",
+    scenario: "In CEH Lab 4 (Step 154), RPCScan is used to query the RPC portmapper on target 10.10.1.19 to discover exported NFS directories and access permissions.",
+    task: "Execute the RPCScan Python tool with the '--rpc' argument against target 10.10.1.19 to enumerate exported NFS shares and mountpoints.",
+    solution: "python3 rpc-scan.py 10.10.1.19 --rpc",
     accepted: [
-      /^snmpwalk\s+-v\s*2c\s+-c\s+public\s+10\.10\.1\.22$/,
-      /^snmpwalk\s+-c\s+public\s+-v\s*2c\s+10\.10\.1\.22$/
+      /^python3?\s+rpc-scan\.py\s+10\.10\.1\.19\s+--rpc$/,
+      /^python3?\s+rpc-scan\.py\s+--rpc\s+10\.10\.1\.19$/
     ],
-    hint: "Use 'snmpwalk -v 2c -c public 10.10.1.22'.",
+    hint: "Run 'python3 rpc-scan.py 10.10.1.19 --rpc' to enumerate NFS mountpoints.",
     diagnostics: [
-      { check: (cmd) => !cmd.startsWith("snmpwalk"), msg: "Use 'snmpwalk' to query the SNMP Management Information Base (MIB)." },
-      { check: (cmd) => !cmd.includes("-v 2c") && !cmd.includes("-v2c"), msg: "Specify SNMP version 2c with '-v 2c'." },
-      { check: (cmd) => !cmd.includes("public"), msg: "Specify community string 'public' using '-c public'." }
+      { check: (cmd) => !cmd.includes("rpc-scan.py"), msg: "Execute the 'rpc-scan.py' script." },
+      { check: (cmd) => !cmd.includes("--rpc"), msg: "Include the '--rpc' switch to list RPC portmapper services." }
     ],
-    tutorNotes: "Teaching Talking Point: Show students: 'SNMPv2-MIB::sysContact.0 = STRING: IT-Support <admin@ceh.corp>'. Point out how SNMP provides employee emails and system uptime (30 minutes).",
-    highlightText: "STRING: IT-Support <admin@ceh.corp>",
+    tutorNotes: "Teaching Point: Explain how attackers exploit NFS shares exported to '(everyone)'. If no_root_squash is enabled, an attacker mounting the share gets full root privileges.",
+    highlightText: "/exports/engineering  (everyone: read-write)",
     analysisQuestion: {
-      prompt: "What sensitive administrative contact detail was extracted from the SNMP MIB?",
+      prompt: "What serious misconfiguration did RPCScan uncover on the exported NFS share '/exports/engineering'?",
       options: [
-        { text: "IT Support email address: admin@ceh.corp", correct: true },
-        { text: "The router's WiFi WPA3 key", correct: false },
-        { text: "A list of encrypted credit card numbers", correct: false },
-        { text: "The Kerberos krbtgt hash", correct: false }
+        { text: "It is exported to 'everyone' with read-write permissions without authentication", correct: true },
+        { text: "It enforces Kerberos AES-256 ticket verification", correct: false },
+        { text: "It is restricted strictly to localhost 127.0.0.1", correct: false },
+        { text: "It blocks remote root users via root_squash", correct: false }
       ],
-      explanation: "SNMP sysContact often contains real IT administrator email addresses, which can be immediately leveraged for spear-phishing and social engineering attacks."
+      explanation: "Exporting NFS shares to 'everyone' allows any network host to mount the filesystem and read or modify sensitive files without valid credentials."
     },
-    output: `SNMPv2-MIB::sysDescr.0 = STRING: Hardware: Intel64 Family 6 Model 158 - Software: Windows Version 10.0 (Build 20348 Multiprocessor Free)
-SNMPv2-MIB::sysObjectID.0 = OID: SNMPv2-SMI::enterprises.311.1.1.3.1.2
-DISMAN-EVENT-MIB::sysUpTimeInstance = Timeticks: (182910) 0:30:29.10
-SNMPv2-MIB::sysContact.0 = STRING: IT-Support <admin@ceh.corp>
-SNMPv2-MIB::sysName.0 = STRING: WIN-SERVER2022
-HOST-RESOURCES-MIB::hrSystemProcesses.0 = Gauge32: 68
-HOST-RESOURCES-MIB::hrStorageDescr.1 = STRING: C:\\ Label:System Serial Number 4A12F981`,
-    cehExamTip: "Exam Alert: SNMP versions 1 and 2c transmit community strings in CLEAR TEXT. Only SNMPv3 provides strong authentication (MD5/SHA) and encryption (DES/AES). Default community string for read-only is 'public'; read-write is 'private'."
+    output: `[+] Scanning RPC services on 10.10.1.19 ...
+[+] Portmapper (111/tcp) responding.
+[+] Program: 100003 (nfs) Version: 3,4 Port: 2049/tcp
+[+] Program: 100005 (mountd) Version: 1,3 Port: 20048/tcp
+[+] Exported NFS Shares:
+    /exports/engineering  (everyone: read-write)
+    /exports/backups      (10.10.1.0/24: read-only)
+[+] RPC scan completed successfully.`,
+    cehExamTip: "Exam Alert: On Linux, 'showmount -e <target_ip>' queries the mountd RPC service to display exported NFS filesystems."
   },
   {
     id: 25,
     module: 4,
     moduleTitle: "Module 04: Enumeration",
-    title: "SMTP User Enumeration (VRFY / EXPN)",
+    title: "DNS Name Server Enumeration (dig ns)",
+    difficulty: "Beginner",
+    points: 100,
+    target: "www.certifiedhacker.com",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 5 (Step 177), penetration testers use the 'dig' command on Linux to enumerate the authoritative DNS name servers responsible for the target domain www.certifiedhacker.com.",
+    task: "Use dig with the 'ns' query type to discover all authoritative DNS name servers for domain www.certifiedhacker.com.",
+    solution: "dig ns www.certifiedhacker.com",
+    accepted: [
+      /^dig\s+ns\s+www\.certifiedhacker\.com$/,
+      /^dig\s+www\.certifiedhacker\.com\s+ns$/
+    ],
+    hint: "Execute 'dig ns www.certifiedhacker.com' to list the authoritative name servers.",
+    diagnostics: [
+      { check: (cmd) => !cmd.startsWith("dig"), msg: "Use the 'dig' utility on Linux." },
+      { check: (cmd) => !cmd.includes("ns"), msg: "Specify the 'ns' query type for Name Server records." },
+      { check: (cmd) => !cmd.includes("www.certifiedhacker.com"), msg: "Target domain is 'www.certifiedhacker.com'." }
+    ],
+    tutorNotes: "Teaching Point: Review DNS record types: A (IPv4), AAAA (IPv6), MX (Mail Exchanger), NS (Name Server), SOA (Start of Authority), TXT (SPF/DKIM verification).",
+    highlightText: "ns1.bluehost.com",
+    analysisQuestion: {
+      prompt: "What primary authoritative DNS name server was discovered for the domain www.certifiedhacker.com?",
+      options: [
+        { text: "ns1.bluehost.com", correct: true },
+        { text: "dns.google.com", correct: false },
+        { text: "ns.cloudflare.com", correct: false },
+        { text: "root-server.net", correct: false }
+      ],
+      explanation: "The ANSWER SECTION of the dig ns response returns 'www.certifiedhacker.com. IN NS ns1.bluehost.com' and 'ns2.bluehost.com'."
+    },
+    output: `; <<>> DiG 9.18.1-1-Debian <<>> ns www.certifiedhacker.com
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 48192
+;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; ANSWER SECTION:
+www.certifiedhacker.com. 86400 IN NS ns1.bluehost.com.
+www.certifiedhacker.com. 86400 IN NS ns2.bluehost.com.
+
+;; Query time: 14 msec
+;; SERVER: 10.10.1.1#53(10.10.1.1)
+;; WHEN: Mon Oct 19 14:15:20 UTC 2026`,
+    cehExamTip: "Exam Alert: 'dig' stands for Domain Information Groper. It queries DNS directly and provides detailed diagnostic sections (QUESTION, ANSWER, AUTHORITY, ADDITIONAL)."
+  },
+  {
+    id: 26,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "DNS Zone Transfer Attempt (dig axfr)",
     difficulty: "Intermediate",
     points: 100,
-    target: "10.10.1.22 (Port 25)",
+    target: "ns1.bluehost.com (certifiedhacker.com)",
     prompt: "root@parrot:~#",
-    scenario: "SMTP servers support commands like VRFY (verify user) and EXPN (expand mailing list). Misconfigured mail servers confirm whether a given mailbox exists.",
-    task: "Use Nmap's 'smtp-enum-users.nse' script to test for valid user accounts on target mail server 10.10.1.22.",
-    solution: "nmap --script smtp-enum-users.nse 10.10.1.22",
+    scenario: "In CEH Lab 5 (Step 181), an attacker attempts an AXFR zone transfer against authoritative server ns1.bluehost.com to copy the entire zone database.",
+    task: "Use dig with the 'axfr' query type targeting name server '@ns1.bluehost.com' for domain www.certifiedhacker.com.",
+    solution: "dig @ns1.bluehost.com www.certifiedhacker.com axfr",
     accepted: [
-      /^nmap\s+--script\s+smtp-enum-users\.nse\s+10\.10\.1\.22$/,
-      /^nmap\s+--script=smtp-enum-users\.nse\s+10\.10\.1\.22$/,
-      /^nmap\s+--script\s+smtp-enum-users\s+10\.10\.1\.22$/
+      /^dig\s+@ns1\.bluehost\.com\s+www\.certifiedhacker\.com\s+axfr$/,
+      /^dig\s+axfr\s+@ns1\.bluehost\.com\s+www\.certifiedhacker\.com$/
     ],
-    hint: "Use 'nmap --script smtp-enum-users.nse 10.10.1.22'.",
+    hint: "Run 'dig @ns1.bluehost.com www.certifiedhacker.com axfr' to test for zone transfer permissions.",
     diagnostics: [
-      { check: (cmd) => !cmd.includes("--script"), msg: "Use '--script' parameter." },
-      { check: (cmd) => !cmd.includes("smtp-enum-users"), msg: "Script name is 'smtp-enum-users.nse'." }
+      { check: (cmd) => !cmd.includes("@ns1.bluehost.com"), msg: "Specify the target name server with '@ns1.bluehost.com'." },
+      { check: (cmd) => !cmd.includes("axfr"), msg: "Use 'axfr' to request a full zone transfer." }
     ],
-    tutorNotes: "Teaching Talking Point: Explain that VRFY returns 250 (User exists) or 550 (User does not exist). Mail admins must disable VRFY and EXPN in sendmail, postfix, or exchange configurations.",
-    highlightText: "webmaster",
+    tutorNotes: "Teaching Point: Reference Question 4.5.1.1: 'Can you perform zone transfer on the primary host of certifiedhacker.com? -> Answer: No (Transfer failed)'. Emphasize that zone transfers operate over TCP port 53.",
+    highlightText: "Transfer failed.",
     analysisQuestion: {
-      prompt: "Which 3 SMTP commands are traditionally exploited by enumeration scripts to confirm valid email mailboxes?",
+      prompt: "Based on Question 4.5.1.1 and the dig output, was the DNS zone transfer permitted by ns1.bluehost.com?",
       options: [
-        { text: "VRFY, EXPN, and RCPT TO", correct: true },
-        { text: "SYN, ACK, and FIN", correct: false },
-        { text: "GET, POST, and PUT", correct: false },
-        { text: "PING, WHOIS, and DIG", correct: false }
+        { text: "No, the transfer failed because the DNS server refused unauthenticated AXFR requests", correct: true },
+        { text: "Yes, all zone records were downloaded successfully", correct: false },
+        { text: "The name server timed out on port 53 UDP", correct: false },
+        { text: "The zone transfer succeeded over DNS over HTTPS (DoH)", correct: false }
       ],
-      explanation: "SMTP enumeration probes VRFY (verify), EXPN (expand alias list), and RCPT TO (recipient check) to confirm whether a user mailbox exists on the server."
+      explanation: "The response explicitly states 'Transfer failed.', proving that the primary name server correctly restricts AXFR zone transfers to authorized secondary servers."
     },
-    output: `Starting Nmap 7.94 ( https://nmap.org ) at 2026-10-18 23:02 UTC
-Nmap scan report for 10.10.1.22
-Host is up (0.00044s latency).
+    output: `; <<>> DiG 9.18.1-1-Debian <<>> @ns1.bluehost.com www.certifiedhacker.com axfr
+; (1 server found)
+;; global options: +cmd
+; Transfer failed.
+;; Query time: 38 msec
+;; SERVER: 162.241.216.11#53(ns1.bluehost.com)
+;; WHEN: Mon Oct 19 14:16:02 UTC 2026`,
+    cehExamTip: "Exam Alert: Standard DNS lookups use UDP port 53. DNS Zone Transfers (AXFR/IXFR) use TCP port 53 because reliable data transmission is required."
+  },
+  {
+    id: 27,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "DNS SOA Administrative Record Query",
+    difficulty: "Beginner",
+    points: 100,
+    target: "certifiedhacker.com",
+    prompt: "C:\\Users\\Administrator>",
+    scenario: "In CEH Lab 5 (Step 189), penetration testers execute nslookup to query the Start of Authority (SOA) record for certifiedhacker.com to find the responsible administrator email address.",
+    task: "Execute nslookup with query type SOA (-type=soa) for certifiedhacker.com.",
+    solution: "nslookup -type=soa certifiedhacker.com",
+    accepted: [
+      /^nslookup\s+-type=soa\s+certifiedhacker\.com$/,
+      /^nslookup\s+-querytype=soa\s+certifiedhacker\.com$/
+    ],
+    hint: "Execute 'nslookup -type=soa certifiedhacker.com' to view the SOA record.",
+    diagnostics: [
+      { check: (cmd) => !cmd.startsWith("nslookup"), msg: "Use the 'nslookup' command." },
+      { check: (cmd) => !cmd.includes("soa"), msg: "Specify '-type=soa' to query Start of Authority." }
+    ],
+    tutorNotes: "Teaching Point: Address Question 4.5.1.2 from the manual: 'Find the responsible mail address for domain certifiedhacker.com' -> Answer: root.box5311.bluehost.com (representing root@box5311.bluehost.com).",
+    highlightText: "responsible mail addr = root.box5311.bluehost.com",
+    analysisQuestion: {
+      prompt: "According to Question 4.5.1.2, what is the 'responsible mail address' recorded in the SOA record of certifiedhacker.com?",
+      options: [
+        { text: "root.box5311.bluehost.com (root@box5311.bluehost.com)", correct: true },
+        { text: "admin@certifiedhacker.com", correct: false },
+        { text: "postmaster@cloudflare.com", correct: false },
+        { text: "hostmaster@iana.org", correct: false }
+      ],
+      explanation: "In DNS SOA records, email addresses replace '@' with the first dot ('.'). The responsible mail address is root.box5311.bluehost.com."
+    },
+    output: `Server:         10.10.1.1
+Address:        10.10.1.1#53
+
+Non-authoritative answer:
+certifiedhacker.com
+        primary name server = ns1.bluehost.com
+        responsible mail addr = root.box5311.bluehost.com
+        serial  = 2023051801
+        refresh = 86400
+        retry   = 7200
+        expire  = 3600000
+        default TTL = 86400`,
+    cehExamTip: "Exam Alert: The SOA record contains: Primary Name Server, Responsible Person Email, Serial Number, Refresh Interval, Retry Interval, Expire Limit, and Minimum TTL."
+  },
+  {
+    id: 28,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "SMTP User Enumeration (smtp-enum-users)",
+    difficulty: "Intermediate",
+    points: 100,
+    target: "10.10.1.19 (SMTP Port 25)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 6 (Task 1, Step 214), penetration testers use Nmap's 'smtp-enum-users' script to query SMTP port 25 and harvest valid mail usernames via VRFY, EXPN, and RCPT TO verbs.",
+    task: "Use Nmap on port 25 with '--script=smtp-enum-users' to enumerate valid mail users on target 10.10.1.19.",
+    solution: "nmap -p 25 --script=smtp-enum-users 10.10.1.19",
+    accepted: [
+      /^nmap\s+-p\s*25\s+--script=smtp-enum-users\s+10\.10\.1\.19$/,
+      /^nmap\s+-p\s*25\s+--script\s+smtp-enum-users(\.nse)?\s+10\.10\.1\.19$/,
+      /^nmap\s+--script=smtp-enum-users\s+-p\s*25\s+10\.10\.1\.19$/
+    ],
+    hint: "Run 'nmap -p 25 --script=smtp-enum-users 10.10.1.19' to harvest email user accounts.",
+    diagnostics: [
+      { check: (cmd) => !cmd.includes("25"), msg: "Specify SMTP port 25 using '-p 25'." },
+      { check: (cmd) => !cmd.includes("smtp-enum-users"), msg: "Include '--script=smtp-enum-users'." }
+    ],
+    tutorNotes: "Teaching Point: Address Question 4.6.1.1: 'Enter the number of users enumerated on target machine' -> 4 users (administrator, postmaster, support, backup).",
+    highlightText: "Accounts found: administrator, postmaster, support, backup",
+    analysisQuestion: {
+      prompt: "According to Question 4.6.1.1 in the CEH Lab Manual, how many valid email user accounts were enumerated by Nmap on the target SMTP server?",
+      options: [
+        { text: "4 users (administrator, postmaster, support, backup)", correct: true },
+        { text: "0 users (all rejected by anti-spam filter)", correct: false },
+        { text: "12 users (Active Directory sync)", correct: false },
+        { text: "1 user (only root)", correct: false }
+      ],
+      explanation: "The smtp-enum-users script successfully identified 4 valid recipient accounts on the target server: administrator, postmaster, support, and backup."
+    },
+    output: `Starting Nmap 7.94 ( https://nmap.org ) at 2026-10-19 14:18 UTC
+Nmap scan report for 10.10.1.19
+Host is up (0.00036s latency).
+
 PORT   STATE SERVICE
 25/tcp open  smtp
-| smtp-enum-users: 
-|   Administrator
-|   admin
-|   support
-|   webmaster
-|_  postmaster
+|_smtp-enum-users: 
+|   Method RCPT returned 4 valid accounts:
+|     administrator
+|     postmaster
+|     support
+|     backup
+|_  Total: 4 valid accounts found.
 
-Nmap done: 1 IP address (1 host up) scanned in 2.14 seconds`,
-    cehExamTip: "Exam Alert: The 3 primary SMTP enumeration commands tested in CEH are: 1. VRFY (verifies user), 2. EXPN (expands mailing aliases), and 3. RCPT TO (defines the mail recipient)."
+Nmap done: 1 IP address (1 host up) scanned in 0.45 seconds`,
+    cehExamTip: "Exam Alert: SMTP commands used for user enumeration: VRFY (verifies user existence), EXPN (expands alias/mailing list), and RCPT TO (identifies message recipient)."
+  },
+  {
+    id: 29,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "SMTP Open Mail Relay Testing",
+    difficulty: "Intermediate",
+    points: 100,
+    target: "10.10.1.19 (SMTP Port 25)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 6 (Step 217), ethical hackers test whether the target SMTP server operates as an open relay, which would allow unauthorized attackers to distribute spoofed phishing emails.",
+    task: "Run Nmap with the 'smtp-open-relay' script on port 25 of target 10.10.1.19.",
+    solution: "nmap -p 25 --script=smtp-open-relay 10.10.1.19",
+    accepted: [
+      /^nmap\s+-p\s*25\s+--script=smtp-open-relay\s+10\.10\.1\.19$/,
+      /^nmap\s+-p\s*25\s+--script\s+smtp-open-relay(\.nse)?\s+10\.10\.1\.19$/
+    ],
+    hint: "Execute 'nmap -p 25 --script=smtp-open-relay 10.10.1.19' to test for open relaying.",
+    diagnostics: [
+      { check: (cmd) => !cmd.includes("smtp-open-relay"), msg: "Use '--script=smtp-open-relay'." },
+      { check: (cmd) => !cmd.includes("10.10.1.19"), msg: "Target IP must be 10.10.1.19." }
+    ],
+    tutorNotes: "Teaching Point: Explain SMTP status code 503 (5.5.1 Error: authentication required). This indicates the server correctly denies relaying to unauthenticated hosts.",
+    highlightText: "Server is not an open relay",
+    analysisQuestion: {
+      prompt: "What does the Nmap 'smtp-open-relay' scan result tell us about the security posture of the mail server?",
+      options: [
+        { text: "The server is secure against open relaying; it enforces authentication before accepting external forwarding", correct: true },
+        { text: "The server allows any anonymous user to send outbound email", correct: false },
+        { text: "Port 25 is blocked by a Layer 7 Web Application Firewall", correct: false },
+        { text: "The mail queue has overflowed and dropped the connection", correct: false }
+      ],
+      explanation: "The output states 'Server is not an open relay (503 5.5.1 Error: authentication required)', confirming that unauthenticated email relaying is disabled."
+    },
+    output: `Starting Nmap 7.94 ( https://nmap.org ) at 2026-10-19 14:20 UTC
+Nmap scan report for 10.10.1.19
+Host is up (0.00038s latency).
+
+PORT   STATE SERVICE
+25/tcp open  smtp
+|_smtp-open-relay: Server is not an open relay (503 5.5.1 Error: authentication required)
+
+Nmap done: 1 IP address (1 host up) scanned in 0.42 seconds`,
+    cehExamTip: "Exam Alert: An open relay (third-party relay) occurs when an SMTP server forwards email without requiring sender authentication. RFC 5321 mandates disabling open relaying."
+  },
+  {
+    id: 30,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "SMTP Extension Commands Enumeration",
+    difficulty: "Beginner",
+    points: 100,
+    target: "10.10.1.19 (SMTP Port 25)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 6 (Step 221), penetration testers enumerate supported SMTP verbs (EHLO response) to discover server capabilities, supported auth protocols, and max message sizes.",
+    task: "Execute Nmap with '--script=smtp-commands' on port 25 of 10.10.1.19 to list all supported SMTP extension verbs.",
+    solution: "nmap -p 25 --script=smtp-commands 10.10.1.19",
+    accepted: [
+      /^nmap\s+-p\s*25\s+--script=smtp-commands\s+10\.10\.1\.19$/,
+      /^nmap\s+-p\s*25\s+--script\s+smtp-commands(\.nse)?\s+10\.10\.1\.19$/
+    ],
+    hint: "Type 'nmap -p 25 --script=smtp-commands 10.10.1.19' to view the supported command verbs.",
+    diagnostics: [
+      { check: (cmd) => !cmd.includes("smtp-commands"), msg: "Include '--script=smtp-commands'." }
+    ],
+    tutorNotes: "Teaching Point: Point out AUTH LOGIN PLAIN in the output. This tells the tester that brute forcing or password spraying can be performed using base64 encoded credentials.",
+    highlightText: "AUTH LOGIN PLAIN",
+    analysisQuestion: {
+      prompt: "Which authentication mechanisms does the target SMTP server advertise in its EHLO response?",
+      options: [
+        { text: "AUTH LOGIN PLAIN", correct: true },
+        { text: "GSSAPI Kerberos v5", correct: false },
+        { text: "NTLMv2 only", correct: false },
+        { text: "No authentication is supported", correct: false }
+      ],
+      explanation: "The smtp-commands output lists 'AUTH LOGIN PLAIN', indicating that both LOGIN and PLAIN standard SASL authentication mechanisms are enabled."
+    },
+    output: `Starting Nmap 7.94 ( https://nmap.org ) at 2026-10-19 14:22 UTC
+Nmap scan report for 10.10.1.19
+Host is up (0.00035s latency).
+
+PORT   STATE SERVICE
+25/tcp open  smtp
+|_smtp-commands: mail.corp.local Hello [10.10.1.1], enhancedstatuscodes, PIPELINING, 8BITMIME, SIZE 20971520, VRFY, ETRN, AUTH LOGIN PLAIN, ENHANCEDSTATUSCODES
+
+Nmap done: 1 IP address (1 host up) scanned in 0.35 seconds`,
+    cehExamTip: "Exam Alert: In SMTP, HELO is the original greeting command (RFC 821). EHLO (Extended HELO) is used in ESMTP (RFC 5321) to request supported extension features."
+  },
+  {
+    id: 31,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "Samba User Enumeration (enum4linux -U)",
+    difficulty: "Intermediate",
+    points: 100,
+    target: "10.10.1.22 (Windows/Samba)",
+    prompt: "root@parrot:~#",
+    scenario: "enum4linux is the premier Linux-based enumeration tool for extracting Windows and Samba accounts, password policies, and domain groups via IPC$ and NetBIOS.",
+    task: "Use enum4linux with the -U flag to extract all user accounts from target 10.10.1.22.",
+    solution: "enum4linux -U 10.10.1.22",
+    accepted: [
+      /^enum4linux\s+-U\s+10\.10\.1\.22$/,
+      /^enum4linux\s+-u\s+10\.10\.1\.22$/
+    ],
+    hint: "Execute 'enum4linux -U 10.10.1.22' to enumerate user accounts.",
+    diagnostics: [
+      { check: (cmd) => !cmd.startsWith("enum4linux"), msg: "Use 'enum4linux' utility." },
+      { check: (cmd) => !cmd.includes("-U") && !cmd.includes("-u"), msg: "Include the '-U' switch for user enumeration." }
+    ],
+    tutorNotes: "Teaching Point: enum4linux wraps polenum, rpcclient, smbclient, and net commands into a single script. Explain RID cycling used by enum4linux to uncover hidden usernames.",
+    highlightText: "user:[Administrator] rid:[0x1f4]",
+    analysisQuestion: {
+      prompt: "What standard RID (Relative Identifier) is assigned to the built-in Windows Administrator account in the enum4linux output?",
+      options: [
+        { text: "500 (hex 0x1f4)", correct: true },
+        { text: "501 (hex 0x1f5 - Guest)", correct: false },
+        { text: "1000 (standard user)", correct: false },
+        { text: "0 (System)", correct: false }
+      ],
+      explanation: "Windows assigns fixed RIDs to built-in accounts: RID 500 (0x1f4) is always Administrator, and RID 501 (0x1f5) is Guest."
+    },
+    output: `Starting enum4linux v0.9.1 ( http://labs.portcullis.co.uk/application/enum4linux/ )
+Target: 10.10.1.22
+========================== 
+|   Users on 10.10.1.22   |
+========================== 
+[+] Enumerating users using SID S-1-5-21-284918204-192840192-384910294
+[+] Found user: 'Administrator' (RID: 500/0x1f4)
+[+] Found user: 'Guest' (RID: 501/0x1f5)
+[+] Found user: 'krbtgt' (RID: 502/0x1f6)
+[+] Found user: 'backup_admin' (RID: 1104/0x450)
+[+] Found user: 'jdoe' (RID: 1105/0x451)
+enum4linux complete.`,
+    cehExamTip: "Exam Alert: RID (Relative Identifier) is the last part of a Windows SID. Built-in Administrator = 500, Guest = 501. Custom domain users start at RID 1000 and increment sequentially."
+  },
+  {
+    id: 32,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "SMB Shares & Security Audit",
+    difficulty: "Intermediate",
+    points: 100,
+    target: "10.10.1.22 (Port 445)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 7, ethical hackers audit SMB shares and operating system details. Nmap's 'smb-enum-shares' and 'smb-enum-users' scripts audit shared directories and access controls on port 445.",
+    task: "Audit port 445 on target 10.10.1.22 using Nmap scripts 'smb-enum-shares,smb-enum-users'.",
+    solution: "nmap -p 445 --script smb-enum-shares,smb-enum-users 10.10.1.22",
+    accepted: [
+      /^nmap\s+-p\s*445\s+--script\s+smb-enum-shares,smb-enum-users\s+10\.10\.1\.22$/,
+      /^nmap\s+--script=smb-enum-shares,smb-enum-users\s+-p\s*445\s+10\.10\.1\.22$/,
+      /^nmap\s+-p\s*445\s+--script\s+smb-enum-shares\s+10\.10\.1\.22$/
+    ],
+    hint: "Run 'nmap -p 445 --script smb-enum-shares,smb-enum-users 10.10.1.22'.",
+    diagnostics: [
+      { check: (cmd) => !cmd.includes("445"), msg: "Specify SMB port 445 with '-p 445'." },
+      { check: (cmd) => !cmd.includes("smb-enum-shares"), msg: "Include 'smb-enum-shares' in the script argument." }
+    ],
+    tutorNotes: "Teaching Point: Address Question 4.7.1.1: 'Find the full name of the OS installed in machine 10.10.1.22' -> Windows Server 2022 Datacenter.",
+    highlightText: "Windows Server 2022 Datacenter",
+    analysisQuestion: {
+      prompt: "According to Question 4.7.1.1 in the CEH Lab Manual, what is the exact operating system installed on the target machine at 10.10.1.22?",
+      options: [
+        { text: "Windows Server 2022 Datacenter", correct: true },
+        { text: "Windows 11 Enterprise", correct: false },
+        { text: "Ubuntu Linux 22.04 LTS", correct: false },
+        { text: "Windows Server 2016 Standard", correct: false }
+      ],
+      explanation: "SMB enumeration returns the exact OS build: 'OS: Windows Server 2022 Datacenter (build 20348)'."
+    },
+    output: `Starting Nmap 7.94 ( https://nmap.org ) at 2026-10-19 14:25 UTC
+Nmap scan report for 10.10.1.22
+Host is up (0.00039s latency).
+
+PORT    STATE SERVICE
+445/tcp open  microsoft-ds
+
+Host script results:
+| smb-os-discovery: 
+|   OS: Windows Server 2022 Datacenter (build 20348)
+|   Computer name: DC-WIN2022
+|   NetBIOS computer name: DC-WIN2022\x00
+|   Domain name: CEH.com
+| smb-enum-shares: 
+|   account_used: guest
+|   \\10.10.1.22\ADMIN$: 
+|     Type: Special
+|     Anonymous access: <none>
+|   \\10.10.1.22\C$: 
+|     Type: Special
+|     Anonymous access: <none>
+|   \\10.10.1.22\SYSVOL: 
+|     Type: Read
+|     Anonymous access: READ
+|   \\10.10.1.22\NETLOGON: 
+|     Type: Read
+|_    Anonymous access: READ`,
+    cehExamTip: "Exam Alert: Port 445 runs SMB directly over TCP/IP without NetBIOS encapsulation. Default administrative shares include C$, ADMIN$, and IPC$."
+  },
+  {
+    id: 33,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "AI-Assisted NetBIOS Enumeration (ShellGPT)",
+    difficulty: "Intermediate",
+    points: 100,
+    target: "10.10.1.11 (Parrot Terminal)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 8 (Task 1, Step 283), ethical hackers use ShellGPT (sgpt) to leverage AI models in generating and executing NetBIOS enumeration commands directly from natural language prompts.",
+    task: "Execute the ShellGPT command with the --shell flag: sgpt --shell \"Perform NetBIOS enumeration on target IP 10.10.1.11\".",
+    solution: "sgpt --shell \"Perform NetBIOS enumeration on target IP 10.10.1.11\"",
+    accepted: [
+      /^sgpt\s+--shell\s+["']Perform NetBIOS enumeration on target IP 10\.10\.1\.11["']$/,
+      /^sgpt\s+--shell\s+.*NetBIOS.*10\.10\.1\.11.*$/
+    ],
+    hint: "Run: sgpt --shell \"Perform NetBIOS enumeration on target IP 10.10.1.11\"",
+    diagnostics: [
+      { check: (cmd) => !cmd.startsWith("sgpt"), msg: "Use the 'sgpt' (ShellGPT) CLI utility." },
+      { check: (cmd) => !cmd.includes("--shell"), msg: "Include the '--shell' argument." },
+      { check: (cmd) => !cmd.includes("10.10.1.11"), msg: "Include target IP '10.10.1.11' in your prompt string." }
+    ],
+    tutorNotes: "Teaching Point: ShellGPT connects to GPT-4 to generate shell commands. Explain how the '[E]xecute, [D]escribe, [A]bort' safety prompt protects against unintended execution.",
+    highlightText: "nbtstat -A 10.10.1.11",
+    analysisQuestion: {
+      prompt: "What shell command was autonomously synthesized by ShellGPT to perform the NetBIOS enumeration?",
+      options: [
+        { text: "nbtstat -A 10.10.1.11", correct: true },
+        { text: "ping -c 4 10.10.1.11", correct: false },
+        { text: "ssh root@10.10.1.11", correct: false },
+        { text: "hydra -l admin 10.10.1.11", correct: false }
+      ],
+      explanation: "ShellGPT analyzed the natural language prompt and accurately generated 'nbtstat -A 10.10.1.11' to enumerate the remote machine's NetBIOS table."
+    },
+    output: `[ShellGPT: AI Command Synthesis]
+Prompt: "Perform NetBIOS enumeration on target IP 10.10.1.11"
+> Synthesized Command: nbtstat -A 10.10.1.11
+
+[E]xecute, [D]escribe, [A]bort: E
+Executing: nbtstat -A 10.10.1.11 ...
+
+NetBIOS Remote Machine Name Table
+
+       Name               Type         Status
+    ---------------------------------------------
+    WINDOWS11      <00>  UNIQUE      Registered
+    CORP           <00>  GROUP       Registered
+    WINDOWS11      <20>  UNIQUE      Registered
+    MAC Address = 00-0C-29-84-3A-1B`,
+    cehExamTip: "Exam Alert: AI-driven security automation enables real-time syntax generation and automated log triage, augmenting traditional CLI tooling."
+  },
+  {
+    id: 34,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "AI-Assisted SNMP MIB Walking (ShellGPT)",
+    difficulty: "Advanced",
+    points: 100,
+    target: "10.10.1.22 (ShellGPT Session)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 8 (Step 289), ethical hackers maintain conversational context using '--chat enum' in ShellGPT to automate SNMP enumeration using SnmpWalk.",
+    task: "Execute the ShellGPT command: sgpt --chat enum --shell \"Perform SNMP enumeration on target IP 10.10.1.22 using SnmpWalk and display the result here\".",
+    solution: "sgpt --chat enum --shell \"Perform SNMP enumeration on target IP 10.10.1.22 using SnmpWalk and display the result here\"",
+    accepted: [
+      /^sgpt\s+--chat\s+enum\s+--shell\s+["']Perform SNMP enumeration on target IP 10\.10\.1\.22 using SnmpWalk and display the result here["']$/,
+      /^sgpt\s+--chat\s+enum\s+--shell\s+.*SNMP.*10\.10\.1\.22.*SnmpWalk.*$/
+    ],
+    hint: "Run: sgpt --chat enum --shell \"Perform SNMP enumeration on target IP 10.10.1.22 using SnmpWalk and display the result here\"",
+    diagnostics: [
+      { check: (cmd) => !cmd.includes("--chat enum"), msg: "Include '--chat enum' to use the persistent enum session." },
+      { check: (cmd) => !cmd.includes("10.10.1.22"), msg: "Include target IP 10.10.1.22." }
+    ],
+    tutorNotes: "Teaching Point: Explain the '--chat <session_name>' parameter in ShellGPT. It preserves conversation memory across prompts so the AI remembers prior reconnaissance findings.",
+    highlightText: "snmpwalk -v 2c -c public 10.10.1.22",
+    analysisQuestion: {
+      prompt: "What is the benefit of the '--chat <session_name>' argument in ShellGPT during a penetration test?",
+      options: [
+        { text: "It maintains stateful conversational context across multiple command generations", correct: true },
+        { text: "It bypasses local firewall egress rules", correct: false },
+        { text: "It encrypts terminal output using AES-GCM", correct: false },
+        { text: "It launches a multi-threaded port scanner", correct: false }
+      ],
+      explanation: "The --chat flag establishes a session history, allowing ShellGPT to reference earlier discovered IP addresses, ports, and credentials in subsequent prompts."
+    },
+    output: `[ShellGPT: Session 'enum']
+Prompt: "Perform SNMP enumeration on target IP 10.10.1.22 using SnmpWalk and display the result here"
+> Synthesized Command: snmpwalk -v 2c -c public 10.10.1.22
+
+[E]xecute, [D]escribe, [A]bort: E
+Executing: snmpwalk -v 2c -c public 10.10.1.22 ...
+
+SNMPv2-MIB::sysDescr.0 = STRING: Windows Server 2022 Datacenter Build 20348
+SNMPv2-MIB::sysName.0 = STRING: DC-WIN2022.CEH.COM
+HOST-RESOURCES-MIB::hrStorageDescr.1 = STRING: C:\\ Label:System  Serial Number 4a218d
+HOST-RESOURCES-MIB::hrStorageSize.1 = INTEGER: 15728639
+HOST-RESOURCES-MIB::hrSWRunName.1 = STRING: "System Idle Process"
+HOST-RESOURCES-MIB::hrSWRunName.4 = STRING: "System"
+HOST-RESOURCES-MIB::hrSWRunName.512 = STRING: "lsass.exe"`,
+    cehExamTip: "Exam Alert: ShellGPT can generate bash one-liners, explain complex command options, and convert natural language queries into security scanner commands."
+  },
+  {
+    id: 35,
+    module: 4,
+    moduleTitle: "Module 04: Enumeration",
+    title: "AI-Assisted SMB Port Discovery (ShellGPT)",
+    difficulty: "Intermediate",
+    points: 100,
+    target: "10.10.1.22 (ShellGPT Session)",
+    prompt: "root@parrot:~#",
+    scenario: "In CEH Lab 8 (Step 305 and Question 4.8.1.1), penetration testers write a ShellGPT prompt to identify the service running on port 445 on the Windows Server 2022 target.",
+    task: "Execute the ShellGPT command: sgpt --shell \"Scan the target IP 10.10.1.22 for the port using SMB with Nmap\".",
+    solution: "sgpt --shell \"Scan the target IP 10.10.1.22 for the port using SMB with Nmap\"",
+    accepted: [
+      /^sgpt\s+--shell\s+["']Scan the target IP 10\.10\.1\.22 for the port using SMB with Nmap["']$/,
+      /^sgpt\s+--shell\s+.*10\.10\.1\.22.*SMB.*Nmap.*$/
+    ],
+    hint: "Run: sgpt --shell \"Scan the target IP 10.10.1.22 for the port using SMB with Nmap\"",
+    diagnostics: [
+      { check: (cmd) => !cmd.startsWith("sgpt"), msg: "Use 'sgpt' utility." },
+      { check: (cmd) => !cmd.includes("10.10.1.22"), msg: "Include target IP 10.10.1.22." }
+    ],
+    tutorNotes: "Teaching Point: Address Question 4.8.1.1: 'Identify the service that is running on port 445 in Windows Server 2022 machine' -> Answer: microsoft-ds.",
+    highlightText: "445/tcp open  microsoft-ds",
+    analysisQuestion: {
+      prompt: "According to Question 4.8.1.1 in the CEH Lab Manual, what service name is identified running on port 445 in the Windows Server 2022 machine?",
+      options: [
+        { text: "microsoft-ds", correct: true },
+        { text: "netbios-ssn", correct: false },
+        { text: "msrpc", correct: false },
+        { text: "domain", correct: false }
+      ],
+      explanation: "Port 445 is officially registered as 'microsoft-ds' (Microsoft Directory Services), used for direct SMB over TCP."
+    },
+    output: `[ShellGPT: AI Command Synthesis]
+Prompt: "Scan the target IP 10.10.1.22 for the port using SMB with Nmap"
+> Synthesized Command: nmap -p 445 -sV 10.10.1.22
+
+[E]xecute, [D]escribe, [A]bort: E
+Executing: nmap -p 445 -sV 10.10.1.22 ...
+
+PORT    STATE SERVICE      VERSION
+445/tcp open  microsoft-ds Windows Server 2022 Datacenter 17763 microsoft-ds
+Service Info: OS: Windows; CPE: cpe:/o:microsoft:windows
+
+Nmap done: 1 IP address (1 host up) scanned in 0.22 seconds`,
+    cehExamTip: "Exam Alert: Service on port 445 is 'microsoft-ds' (Direct Host SMB). Port 139 is 'netbios-ssn' (NetBIOS Session Service)."
   },
 
   // ==========================================
   // MODULE 5: VULNERABILITY ANALYSIS
   // ==========================================
   {
-    id: 26,
+    id: 36,
     module: 5,
     moduleTitle: "Module 05: Vulnerability Analysis",
     title: "Vulnerability Scanning via Nmap 'vuln' Category",
@@ -1260,7 +1754,7 @@ Nmap done: 1 IP address (1 host up) scanned in 8.21 seconds`,
     cehExamTip: "Exam Alert: NSE script categories include: auth, broadcast, default, discovery, dos, exploit, external, fuzzer, intrusive, malware, safe, version, and vuln. Questions often ask which category safely checks without crashing services ('safe')."
   },
   {
-    id: 27,
+    id: 37,
     module: 5,
     moduleTitle: "Module 05: Vulnerability Analysis",
     title: "Web Server Vulnerability Scanning with Nikto",
@@ -1308,7 +1802,7 @@ Nmap done: 1 IP address (1 host up) scanned in 8.21 seconds`,
     cehExamTip: "Exam Alert: Nikto scans rely on a database of known vulnerable paths (nikto_tests.csv). In CEH, remember that vulnerability scanners like Nessus, OpenVAS, and Nikto generate FALSE POSITIVES that must be manually validated by the ethical hacker."
   },
   {
-    id: 28,
+    id: 38,
     module: 5,
     moduleTitle: "Module 05: Vulnerability Analysis",
     title: "Offline Exploit Database Searching (searchsploit)",
