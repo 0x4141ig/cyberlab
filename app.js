@@ -394,7 +394,10 @@ function updateProgress() {
 // Evaluate Command
 function evaluateCommand(userCmd) {
   if (!currentUser) {
-    openAuthModal(true);
+    const appRoot = document.getElementById("appRoot");
+    const authGate = document.getElementById("authGate");
+    if (appRoot) appRoot.style.display = "none";
+    if (authGate) authGate.style.display = "flex";
     return;
   }
 
@@ -604,7 +607,10 @@ function renderConceptQuestion(q, wasAlreadyCompleted = false) {
 
 function selectConceptAnswer(q, option, btnElement) {
   if (!currentUser) {
-    openAuthModal(true);
+    const appRoot = document.getElementById("appRoot");
+    const authGate = document.getElementById("authGate");
+    if (appRoot) appRoot.style.display = "none";
+    if (authGate) authGate.style.display = "flex";
     return;
   }
   const allBtns = elConceptOptions.querySelectorAll(".concept-opt-btn");
@@ -683,12 +689,10 @@ function prevQuestion() {
 
 // Hint & Solution (Strictly NO Copy/Paste - forces typing)
 function showHint() {
-  if (!currentUser) {
-    openAuthModal(true);
-    return;
-  }
   const q = CEH_QUESTIONS[currentIndex];
-  if (currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
+  if (!q) return;
+
+  if (currentUser && currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
     currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 15;
     saveCurrentUser();
   }
@@ -696,18 +700,16 @@ function showHint() {
 }
 
 function showSolution() {
-  if (!currentUser) {
-    openAuthModal(true);
-    return;
-  }
   const q = CEH_QUESTIONS[currentIndex];
-  if (currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
+  if (!q) return;
+
+  if (currentUser && currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
     currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 50;
     saveCurrentUser();
   }
   // Reveal Solution optionally activates the live keystroke tracker for assistance!
   setTrackerVisible(true);
-  updateKeystrokeTracker(elTerminalInput.value);
+  updateKeystrokeTracker(elTerminalInput ? elTerminalInput.value : "");
   showGuidance(
     "hint",
     `<strong>🔑 Solution Command:</strong><br>
@@ -1586,32 +1588,24 @@ function updateLeaderboardWithUser() {
 
 // Modals
 function openAuthModal(force = false) {
-  const modal = document.getElementById("authModal");
-  const closeBtn = document.getElementById("authModalClose");
-  if (closeBtn) {
-    closeBtn.style.display = (!currentUser || force) ? "none" : "block";
+  if (currentUser) {
+    if (confirm(`You are currently logged in as "${currentUser.username}".\n\nDo you want to switch accounts or sign out?`)) {
+      handleSignOut();
+    }
+  } else {
+    const appRoot = document.getElementById("appRoot");
+    const authGate = document.getElementById("authGate");
+    if (appRoot) appRoot.style.display = "none";
+    if (authGate) authGate.style.display = "flex";
   }
-  const authNotice = document.getElementById("authCloudNotice");
-  if (authNotice) {
-    authNotice.style.display = (currentUser && currentUser.role === "admin") ? "flex" : "none";
-  }
-  modal.style.display = "flex";
-  updateCloudStatusIndicator();
-  setTimeout(() => {
-    const isLogin = document.getElementById("formLogin").style.display !== "none";
-    const input = document.getElementById(isLogin ? "loginUsername" : "signupUsername");
-    if (input) input.focus();
-  }, 100);
 }
 
 function closeAuthModal() {
-  if (!currentUser) {
-    alert("Please sign in or create a practice username to enter the labs.");
-    return;
-  }
-  const modal = document.getElementById("authModal");
-  if (modal) {
-    modal.style.display = "none";
+  const authGate = document.getElementById("authGate");
+  const appRoot = document.getElementById("appRoot");
+  if (currentUser) {
+    if (authGate) authGate.style.display = "none";
+    if (appRoot) appRoot.style.display = "flex";
   }
 }
 
@@ -1658,8 +1652,14 @@ async function handleLogin(e) {
       penalties: {}
     };
     sessionStorage.setItem("ceh_current_user", "admin");
-    localStorage.setItem("ceh_active_user", "admin");
-    closeAuthModal();
+    localStorage.setItem("ceh_last_username", "admin");
+
+    // Unlock and show app workspace
+    const authGate = document.getElementById("authGate");
+    const appRoot = document.getElementById("appRoot");
+    if (authGate) authGate.style.display = "none";
+    if (appRoot) appRoot.style.display = "flex";
+
     updateAuthUI();
     renderQuestionGrid();
     loadQuestion(currentIndex);
@@ -1669,7 +1669,7 @@ async function handleLogin(e) {
 
   // 2. Supabase Cloud Database Login
   if (isCloudApiAvailable()) {
-    const submitBtn = document.querySelector("#formLogin button[type='submit']");
+    const submitBtn = document.getElementById("btnLoginSubmit") || document.querySelector("#formLogin button[type='submit']");
     const origText = submitBtn ? submitBtn.innerText : "Sign In";
     if (submitBtn) submitBtn.innerText = "Verifying...";
 
@@ -1679,7 +1679,7 @@ async function handleLogin(e) {
     if (cloudRes.ok && cloudRes.user) {
       currentUser = cloudRes.user;
       sessionStorage.setItem("ceh_current_user", currentUser.username);
-      localStorage.setItem("ceh_active_user", currentUser.username);
+      localStorage.setItem("ceh_last_username", currentUser.username);
 
       // Cache user locally
       const users = getStoredUsers();
@@ -1701,11 +1701,15 @@ async function handleLogin(e) {
         currentIndex = currentUser.currentTaskId - 1;
       }
 
-      closeAuthModal();
+      // Unlock and show app workspace
+      const authGate = document.getElementById("authGate");
+      const appRoot = document.getElementById("appRoot");
+      if (authGate) authGate.style.display = "none";
+      if (appRoot) appRoot.style.display = "flex";
+
       updateAuthUI();
       renderQuestionGrid();
       loadQuestion(currentIndex);
-      alert(`Welcome back, ${currentUser.username}!\nCloud progress restored: ${currentUser.solved.length} tasks solved, ${currentUser.score} pts.\nResuming at Task ${currentIndex + 1}.`);
       return;
     }
 
@@ -1730,13 +1734,19 @@ async function handleLogin(e) {
           currentTaskModule: localUsers[u].currentTaskModule || "Module 01: Introduction to Ethical Hacking"
         };
         sessionStorage.setItem("ceh_current_user", u);
-        localStorage.setItem("ceh_active_user", u);
+        localStorage.setItem("ceh_last_username", u);
         if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
           currentIndex = currentUser.currentTaskId - 1;
         }
         cloudSaveUserProgress(currentUser);
         syncUserScoreToCloud();
-        closeAuthModal();
+
+        // Unlock and show app workspace
+        const authGate = document.getElementById("authGate");
+        const appRoot = document.getElementById("appRoot");
+        if (authGate) authGate.style.display = "none";
+        if (appRoot) appRoot.style.display = "flex";
+
         updateAuthUI();
         renderQuestionGrid();
         loadQuestion(currentIndex);
@@ -1762,20 +1772,26 @@ async function handleLogin(e) {
       currentTaskModule: users[u].currentTaskModule || "Module 01: Introduction to Ethical Hacking"
     };
     sessionStorage.setItem("ceh_current_user", u);
-    localStorage.setItem("ceh_active_user", u);
+    localStorage.setItem("ceh_last_username", u);
     if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
       currentIndex = currentUser.currentTaskId - 1;
     }
     cloudSaveUserProgress(currentUser);
     syncUserScoreToCloud();
-    closeAuthModal();
+
+    // Unlock and show app workspace
+    const authGate = document.getElementById("authGate");
+    const appRoot = document.getElementById("appRoot");
+    if (authGate) authGate.style.display = "none";
+    if (appRoot) appRoot.style.display = "flex";
+
     updateAuthUI();
     renderQuestionGrid();
     loadQuestion(currentIndex);
     return;
   }
 
-  alert("Invalid username or password.");
+  alert("Invalid credentials. Please verify your username and password, or click 'Sign Up' to create an account.");
 }
 
 async function handleSignup(e) {
@@ -1784,39 +1800,49 @@ async function handleSignup(e) {
   const p = document.getElementById("signupPassword").value;
 
   if (!u || !p) {
-    alert("Please enter both username and password.");
+    alert("Please choose a username and password.");
     return;
   }
 
   if (u.toLowerCase() === "admin") {
-    alert("This username is reserved.");
+    alert("The username 'admin' is reserved for instructor login.");
     return;
   }
 
+  const users = getStoredUsers();
+  if (users[u]) {
+    alert("Username already taken! Please choose another username.");
+    return;
+  }
+
+  const submitBtn = document.getElementById("btnSignupSubmit") || document.querySelector("#formSignup button[type='submit']");
+  const origText = submitBtn ? submitBtn.innerText : "Create Practice Account";
+  if (submitBtn) submitBtn.innerText = "Creating Account...";
+
   // 1. Supabase Cloud Signup
   if (isCloudApiAvailable()) {
-    const submitBtn = document.querySelector("#formSignup button[type='submit']");
-    const origText = submitBtn ? submitBtn.innerText : "Create Practice Account";
-    if (submitBtn) submitBtn.innerText = "Creating Account...";
-
     const cloudRes = await cloudSignupUser(u, p);
-    if (submitBtn) submitBtn.innerText = origText;
-
     if (!cloudRes.ok && !cloudRes.offline) {
+      if (submitBtn) submitBtn.innerText = origText;
       alert(cloudRes.message || "Failed to create account in Supabase.");
       return;
     }
   }
 
+  if (submitBtn) submitBtn.innerText = origText;
+
   // 2. Local Storage Cache
-  const users = getStoredUsers();
   users[u] = {
     password: p,
     role: "student",
     score: 0,
     solved: [],
     conceptSolved: [],
-    penalties: {}
+    penalties: {},
+    currentTaskId: 1,
+    currentTaskTitle: CEH_QUESTIONS[0].title,
+    currentTaskModule: CEH_QUESTIONS[0].moduleTitle,
+    lastActive: "Just now"
   };
   saveStoredUsers(users);
 
@@ -1826,29 +1852,51 @@ async function handleSignup(e) {
     score: 0,
     solved: [],
     conceptSolved: [],
-    penalties: {}
+    penalties: {},
+    currentTaskId: 1,
+    currentTaskTitle: CEH_QUESTIONS[0].title,
+    currentTaskModule: CEH_QUESTIONS[0].moduleTitle
   };
   sessionStorage.setItem("ceh_current_user", u);
-  localStorage.setItem("ceh_active_user", u);
+  localStorage.setItem("ceh_last_username", u);
 
   updateLeaderboardWithUser();
-  closeAuthModal();
+
+  // Unlock and show app workspace
+  const authGate = document.getElementById("authGate");
+  const appRoot = document.getElementById("appRoot");
+  if (authGate) authGate.style.display = "none";
+  if (appRoot) appRoot.style.display = "flex";
+
   updateAuthUI();
   renderQuestionGrid();
-  loadQuestion(currentIndex);
-  alert(`Welcome, ${u}! Practice account created.\nYour credentials and progress will synchronize across devices.`);
+  loadQuestion(0);
 }
 
 function handleSignOut() {
   currentUser = null;
   sessionStorage.removeItem("ceh_current_user");
   localStorage.removeItem("ceh_active_user");
-  document.getElementById("loginUsername").value = "";
-  document.getElementById("loginPassword").value = "";
-  document.getElementById("signupUsername").value = "";
-  document.getElementById("signupPassword").value = "";
+
+  const loginPass = document.getElementById("loginPassword");
+  const signupPass = document.getElementById("signupPassword");
+  if (loginPass) loginPass.value = "";
+  if (signupPass) signupPass.value = "";
+
+  // Hide the lab workspace and lock behind authGate!
+  const appRoot = document.getElementById("appRoot");
+  const authGate = document.getElementById("authGate");
+  if (appRoot) appRoot.style.display = "none";
+  if (authGate) authGate.style.display = "flex";
+
+  // Hide any open floating modals
+  ["cheatModal", "leaderboardModal", "cloudModal", "adminPortalModal"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = "none";
+  });
+
   updateAuthUI();
-  openAuthModal(true);
+  setAuthTab("login");
 }
 
 async function openLeaderboard() {
@@ -2477,14 +2525,11 @@ window.addEventListener("keydown", (e) => {
   }
 });
 
-["cheatModal", "authModal", "leaderboardModal", "cloudModal", "adminPortalModal"].forEach((id) => {
+["cheatModal", "leaderboardModal", "cloudModal", "adminPortalModal"].forEach((id) => {
   const modalEl = document.getElementById(id);
   if (modalEl) {
     modalEl.addEventListener("click", (e) => {
       if (e.target.id === id) {
-        if (id === "authModal" && !currentUser) {
-          return; // Prevent dismissing without login/signup
-        }
         modalEl.style.display = "none";
       }
     });
@@ -2495,10 +2540,20 @@ window.addEventListener("keydown", (e) => {
 window.addEventListener("DOMContentLoaded", async () => {
   cleanMockData();
 
-  // Immediately render question grid and load Task 1 so manual is never empty
-  renderQuestionGrid();
-  loadQuestion(0);
+  // 1. Enforce strict lock: appRoot hidden, authGate visible
+  const appRoot = document.getElementById("appRoot");
+  const authGate = document.getElementById("authGate");
+  if (appRoot) appRoot.style.display = "none";
+  if (authGate) authGate.style.display = "flex";
 
+  // Pre-fill username from previous session if exists
+  const lastUser = localStorage.getItem("ceh_last_username");
+  const loginUser = document.getElementById("loginUsername");
+  if (lastUser && loginUser) {
+    loginUser.value = lastUser;
+  }
+
+  // Ensure default admin user is initialized in local store
   const users = getStoredUsers();
   if (!users["admin"]) {
     users["admin"] = { password: "Pa$$w0rd", role: "admin", score: 0, solved: [], conceptSolved: [] };
@@ -2507,8 +2562,6 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   // Auto-discover Supabase credentials if deployed on Vercel
   await autoDiscoverCloudConfig();
-
-  // Pre-fetch cloud leaderboard and update cloud indicator
   updateCloudStatusIndicator();
   await syncLocalUsersToCloud();
   const initialLb = await fetchCloudLeaderboard();
@@ -2516,33 +2569,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     renderLeaderboardRows(initialLb);
   }
 
-  // Check if an authenticated user session is active
-  const activeUser = sessionStorage.getItem("ceh_current_user") || localStorage.getItem("ceh_active_user");
-  if (activeUser && (users[activeUser] || activeUser.toLowerCase() === "admin")) {
-    const userData = users[activeUser] || {};
-    currentUser = {
-      username: activeUser,
-      role: userData.role || (activeUser.toLowerCase() === "admin" ? "admin" : "student"),
-      score: userData.score || 0,
-      solved: userData.solved || [],
-      conceptSolved: userData.conceptSolved || [],
-      penalties: userData.penalties || {},
-      currentTaskId: userData.currentTaskId || 1,
-      currentTaskTitle: userData.currentTaskTitle || "Host Reachability & ICMP Verification",
-      currentTaskModule: userData.currentTaskModule || "Module 01: Introduction to Ethical Hacking"
-    };
-
-    if (currentUser.role !== "admin" && currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
-      currentIndex = currentUser.currentTaskId - 1;
-    }
-
-    updateAuthUI();
-    renderQuestionGrid();
-    loadQuestion(currentIndex);
-  } else {
-    // Show login / signup modal FIRST to protect the labs!
-    currentUser = null;
-    updateAuthUI();
-    openAuthModal(true);
-  }
+  // Strictly keep appRoot hidden until user logs in or registers
+  currentUser = null;
+  updateAuthUI();
 });

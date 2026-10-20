@@ -4,13 +4,76 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CEH v13 Interactive Lab Walkthrough (Modules 1 - 5) | NetAcad & CTF</title>
-  <link rel="stylesheet" href="style.css?v=20261019_v6">
+  <link rel="stylesheet" href="style.css?v=20261020_v2">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
+  <!-- Fullscreen Dedicated Authentication Gate (Locked by Default) -->
+  <div id="authGate" class="auth-gate-wrapper">
+    <div class="auth-gate-card">
+      <div class="auth-gate-header">
+        <div class="auth-gate-badge">CEH v13</div>
+        <h1 class="auth-gate-title">Ethical Hacking Lab Platform</h1>
+        <div class="auth-gate-subtitle">TM359 Tutorial Class • Modules 01 – 05 Practice &amp; Education Sandbox</div>
+        <div class="auth-gate-desc">
+          Interactive lab exercises, live terminal, and CTF challenges are strictly protected. Please sign in or register to unlock the workspace.
+        </div>
+      </div>
+
+      <!-- Sign In vs Sign Up Tabs -->
+      <div class="auth-tabs" style="margin-bottom: 18px;">
+        <button type="button" class="auth-tab active" id="tabLogin" onclick="setAuthTab('login')">Sign In</button>
+        <button type="button" class="auth-tab" id="tabSignup" onclick="setAuthTab('signup')">Sign Up (Student / Colleague)</button>
+      </div>
+
+      <!-- Cloud DB Status Pill -->
+      <div id="authCloudNotice" style="display: none; margin-bottom: 14px; font-size: 0.74rem; padding: 6px 10px; border-radius: 6px; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); color: var(--text-muted);">
+        <span id="authCloudNoticeText">Database connected</span>
+      </div>
+
+      <!-- Sign In Form -->
+      <form id="formLogin" class="auth-form" onsubmit="handleLogin(event)">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" id="loginUsername" class="form-input" placeholder="e.g. admin or your student username" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required autocomplete="current-password" />
+        </div>
+        <button type="submit" class="btn-primary" id="btnLoginSubmit" style="padding: 11px; font-size: 0.92rem; font-weight: 700; margin-top: 6px;">
+          🔐 Sign In &amp; Enter Labs
+        </button>
+        <div id="loginFeedback" class="auth-feedback" style="display: none;"></div>
+      </form>
+
+      <!-- Sign Up Form (For Students / Colleagues) -->
+      <form id="formSignup" class="auth-form" style="display: none;" onsubmit="handleSignup(event)">
+        <div class="form-group">
+          <label class="form-label">Choose Practice Username</label>
+          <input type="text" id="signupUsername" class="form-input" placeholder="e.g. Colleague_Name" required autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Create Password</label>
+          <input type="password" id="signupPassword" class="form-input" placeholder="••••••••" required autocomplete="new-password" />
+        </div>
+        <button type="submit" class="btn-primary" id="btnSignupSubmit" style="padding: 11px; font-size: 0.92rem; font-weight: 700; margin-top: 6px;">
+          🚀 Create Account &amp; Enter Labs
+        </button>
+        <div id="signupFeedback" class="auth-feedback" style="display: none;"></div>
+      </form>
+
+      <div class="auth-gate-footer">
+        <span>🔒 Secure Sandbox</span> • <span>38 Hands-on Exercises</span> • <span>Cloud Progress Sync</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Entire Lab Workspace (Locked & Completely Hidden until Login) -->
+  <div id="appRoot" style="display: none; flex-direction: column; min-height: 100vh;">
   <!-- Top Navigation Header -->
   <header>
     <div class="logo-badge">
@@ -262,56 +325,6 @@
       </div>
     </section>
   </main>
-
-  <!-- Auth Modal: Sign In / Sign Up (Admin credentials completely hidden!) -->
-  <div class="modal-overlay" id="authModal">
-    <div class="modal-card" style="max-width: 420px;">
-      <div class="modal-header">
-        <h3 style="font-size: 1.05rem; color: var(--accent-cyan);">CEH v13 Lab Authentication</h3>
-        <button class="modal-close" id="authModalClose" onclick="closeAuthModal()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p style="font-size: 0.82rem; color: var(--text-muted); margin-bottom: 14px; line-height: 1.45;">
-          Welcome! Please sign in to your account or create a practice username to enter the labs and track your CTF progress.
-        </p>
-        <div class="auth-tabs">
-          <button class="auth-tab active" id="tabLogin" onclick="setAuthTab('login')">Sign In</button>
-          <button class="auth-tab" id="tabSignup" onclick="setAuthTab('signup')">Sign Up (Practice)</button>
-        </div>
-
-        <!-- Cloud Sync Indicator in Auth Modal (Restricted to Admin/Tutor) -->
-        <div id="authCloudNotice" style="display: none; margin-bottom: 12px; font-size: 0.74rem; padding: 6px 10px; border-radius: 6px; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); border: 1px solid var(--border-color); color: var(--text-muted);">
-          <span id="authCloudNoticeText">Checking database connection...</span>
-          <button type="button" onclick="openCloudModal()" style="background: none; border: none; color: var(--accent-cyan); cursor: pointer; text-decoration: underline; font-size: 0.74rem; padding: 0;">Setup Cloud</button>
-        </div>
-
-        <!-- Sign In Form -->
-        <form id="formLogin" class="auth-form" onsubmit="handleLogin(event)">
-          <div class="form-group">
-            <label class="form-label">Username</label>
-            <input type="text" id="loginUsername" class="form-input" placeholder="Enter username..." required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Password</label>
-            <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required />
-          </div>
-          <button type="submit" class="btn-primary">Sign In</button>
-        </form>
-
-        <!-- Sign Up Form (For Colleagues) -->
-        <form id="formSignup" class="auth-form" style="display: none;" onsubmit="handleSignup(event)">
-          <div class="form-group">
-            <label class="form-label">Choose Username</label>
-            <input type="text" id="signupUsername" class="form-input" placeholder="e.g. Colleague_Name" required />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Create Password</label>
-            <input type="password" id="signupPassword" class="form-input" placeholder="••••••••" required />
-          </div>
-          <button type="submit" class="btn-primary">Create Practice Account</button>
-        </form>
-      </div>
-    </div>
   </div>
 
   <!-- Leaderboard Modal (CTF Scoreboard) -->
@@ -601,7 +614,7 @@
     </div>
   </div>
 
-  <script src="questions.js?v=20261019_v6"></script>
-  <script src="app.js?v=20261019_v6"></script>
+  <script src="questions.js?v=20261020_v2"></script>
+  <script src="app.js?v=20261020_v2"></script>
 </body>
 </html>
