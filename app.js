@@ -172,6 +172,47 @@ function showPasteWarning() {
 }
 
 // Load Question
+
+// Render Modern Target Scope Intelligence Card
+function renderTargetBadge(q) {
+  if (!elTargetBadge || !q) return;
+  const isDomain = q.target.includes(".com") || (q.target.includes(".") && !/\d{1,3}\.\d{1,3}/.test(q.target));
+  const isWinServer = q.target.includes("10.10.1.22") || q.target.toLowerCase().includes("windows");
+  const isParrot = q.target.includes("10.10.1.11") || q.target.includes("Parrot");
+  const isLinux = q.target.includes("10.10.1.19");
+
+  let envLabel = "Windows Server 2022 Datacenter (Domain Host)";
+  if (isDomain) envLabel = "External Target / Public DNS Domain";
+  else if (isParrot) envLabel = "Parrot Security OS (Internal Gateway)";
+  else if (isLinux) envLabel = "Linux Server (RPC & Mail Services)";
+
+  const cleanIp = q.target.split(" ")[0].replace(/[\(\)]/g, "");
+
+  elTargetBadge.innerHTML = `
+    <div class="target-card-inner">
+      <div class="target-card-col">
+        <span class="target-card-label">🎯 IN-SCOPE TARGET</span>
+        <div class="target-card-value-wrap">
+          <code class="target-card-ip">${q.target}</code>
+          <button type="button" class="btn-copy-target" onclick="navigator.clipboard.writeText('${cleanIp}')" title="Copy Target IP/Domain (${cleanIp})">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+          </button>
+        </div>
+      </div>
+      <div class="target-card-divider"></div>
+      <div class="target-card-col">
+        <span class="target-card-label">🖥️ ENVIRONMENT &amp; ROLE</span>
+        <span class="target-card-val-text">${envLabel}</span>
+      </div>
+      <div class="target-card-divider"></div>
+      <div class="target-card-col">
+        <span class="target-card-label">⚡ LAB NETWORK STATUS</span>
+        <span class="target-status-badge"><span class="live-pulse-dot"></span> HOST ONLINE</span>
+      </div>
+    </div>
+  `;
+}
+
 function loadQuestion(idx) {
   if (idx < 0 || idx >= CEH_QUESTIONS.length) return;
   currentIndex = idx;
@@ -180,7 +221,7 @@ function loadQuestion(idx) {
   // Update Left Manual Pane
   elModuleTag.innerText = q.moduleTitle;
   elTaskTitle.innerText = `Task ${q.id}: ${q.title}`;
-  elTargetBadge.innerHTML = `<strong>Target:</strong> ${q.target}`;
+  renderTargetBadge(q);
 
   // Update Command Syntax & Argument Breakdown
   renderCommandBreakdown(q);
@@ -384,8 +425,16 @@ function updateAuthUI() {
     elRoleBadge.innerText = "Guest";
     elModeBanner.className = "mode-banner student";
     elModeBanner.innerHTML = `
-      <span><strong>🔒 Authentication Required</strong> — Please Sign In or Create a Practice Account to begin</span>
-      <span style="opacity: 0.85;">Target: 10.10.1.22 (Windows Server 2022)</span>
+      <div class="mode-bar-inner">
+        <div class="mode-bar-left">
+          <span class="mode-status-dot lock"></span>
+          <span class="mode-bar-title">🔒 Authentication Required</span>
+          <span class="mode-bar-sub">• Sign in or create practice account</span>
+        </div>
+        <div class="mode-bar-right">
+          <span class="mode-target-tag">Target Scope: 10.10.1.0/24 Subnet</span>
+        </div>
+      </div>
     `;
     updateProgress();
     renderQuestionGrid();
@@ -402,20 +451,40 @@ function updateAuthUI() {
     elRoleBadge.innerText = "Instructor Admin";
     elModeBanner.className = "mode-banner tutor";
     elModeBanner.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; width:100%; flex-wrap:wrap; gap:8px;">
-        <span><strong>🎓 Instructor Admin Mode</strong> — Full Teaching Access &amp; Solutions Unlocked | Target: 10.10.1.22</span>
-        <button class="btn-header" onclick="openAdminPortal()" style="background:var(--accent-cyan); color:#0a0e17; font-weight:700; border:none; padding:4px 12px; font-size:0.75rem; border-radius:4px; cursor:pointer;">
-          🛡️ Open Admin Portal &amp; Live Matrix
-        </button>
+      <div class="mode-bar-inner">
+        <div class="mode-bar-left">
+          <span class="mode-status-dot tutor"></span>
+          <span class="mode-bar-title">🎓 Instructor Teaching Mode</span>
+          <span class="mode-bar-sub">• Full Teaching Access &amp; Solutions Unlocked</span>
+        </div>
+        <div class="mode-bar-center">
+          <span class="mode-target-pill">🎯 <strong>Lab Scope:</strong> 10.10.1.22 <span class="host-online-dot">● ONLINE</span></span>
+        </div>
+        <div class="mode-bar-right">
+          <button class="mode-admin-btn" onclick="openAdminPortal()">
+            🛡️ Admin Class Matrix
+          </button>
+        </div>
       </div>
     `;
   } else {
     elRoleBadge.className = "role-badge student";
-    elRoleBadge.innerText = "Practice";
+    elRoleBadge.innerText = "CTF Practice";
     elModeBanner.className = "mode-banner student";
     elModeBanner.innerHTML = `
-      <span><strong>🎯 Colleague CTF Practice Lab Mode</strong> — Manual typing enforced, earn points</span>
-      <span style="color: var(--accent-yellow); font-weight:600;">Score: ${currentUser.score} pts</span>
+      <div class="mode-bar-inner">
+        <div class="mode-bar-left">
+          <span class="mode-status-dot live"></span>
+          <span class="mode-bar-title">⚡ Colleague CTF Practice Lab Mode</span>
+          <span class="mode-bar-sub">• Manual Typing Enforced</span>
+        </div>
+        <div class="mode-bar-center">
+          <span class="mode-target-pill">🎯 <strong>Lab Scope:</strong> 10.10.1.22 <span class="host-online-dot">● ONLINE</span></span>
+        </div>
+        <div class="mode-bar-right">
+          <span class="mode-score-pill">⭐ Current Score: <strong>${currentUser.score} pts</strong></span>
+        </div>
+      </div>
     `;
   }
 
