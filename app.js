@@ -252,6 +252,7 @@ function loadQuestion(idx) {
 }
 
 // Render Question Grid with Module Separation & Ability to Show All
+// Render Modules & Tasks in Dedicated Left Sidebar
 function renderQuestionGrid() {
   if (!elQuestionGrid) return;
   elQuestionGrid.innerHTML = "";
@@ -260,66 +261,107 @@ function renderQuestionGrid() {
     { id: 1, name: "Intro to Ethical Hacking" },
     { id: 2, name: "Footprinting & Recon" },
     { id: 3, name: "Scanning Networks" },
-    { id: 4, name: "Enumeration & Information Gathering" },
+    { id: 4, name: "Enumeration & NetBIOS" },
     { id: 5, name: "Vulnerability Analysis" }
   ];
 
-  // If filtered to a specific module, show quick indicator + Show All button
-  if (currentFilter !== "all") {
-    const activeMod = modules.find(m => m.id.toString() === currentFilter);
-    const count = CEH_QUESTIONS.filter(q => q.module.toString() === currentFilter).length;
+  const searchInput = document.getElementById("sidebarSearch");
+  const searchTerm = (searchInput ? searchInput.value : "").toLowerCase().trim();
 
-    const notice = document.createElement("div");
-    notice.className = "grid-filter-notice";
-    notice.innerHTML = `
-      <span>Showing <strong>Module 0${currentFilter}: ${activeMod ? activeMod.name : ''}</strong> (${count} Tasks)</span>
-      <button class="btn-grid-show-all" onclick="setModuleFilter('all')">👁️ Show All Modules (${CEH_QUESTIONS.length} Tasks)</button>
-    `;
-    elQuestionGrid.appendChild(notice);
-  }
+  // Update total badge
+  const totalBadge = document.getElementById("sidebarTotalBadge");
+  if (totalBadge) totalBadge.innerText = `${CEH_QUESTIONS.length} Labs`;
+
+  // Update sidebar progress bar
+  const solvedCount = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved.length : 0;
+  const pct = Math.round((solvedCount / CEH_QUESTIONS.length) * 100);
+  const elSidebarPct = document.getElementById("sidebarProgressPct");
+  const elSidebarFill = document.getElementById("sidebarProgressFill");
+  if (elSidebarPct) elSidebarPct.innerText = `${solvedCount} / ${CEH_QUESTIONS.length} (${pct}%)`;
+  if (elSidebarFill) elSidebarFill.style.width = `${pct}%`;
 
   const activeModules = currentFilter === "all"
     ? modules
     : modules.filter(m => m.id.toString() === currentFilter);
 
   activeModules.forEach(mod => {
-    const modQuestions = [];
+    let modQuestions = [];
     CEH_QUESTIONS.forEach((q, idx) => {
       if (q.module === mod.id) {
-        modQuestions.push({ q, idx });
+        if (!searchTerm || q.title.toLowerCase().includes(searchTerm) || q.task.toLowerCase().includes(searchTerm) || q.id.toString() === searchTerm) {
+          modQuestions.push({ q, idx });
+        }
       }
     });
 
     if (modQuestions.length === 0) return;
 
-    const row = document.createElement("div");
-    row.className = "module-section-row";
+    const group = document.createElement("div");
+    group.className = "sidebar-module-group";
+
+    const solvedInMod = modQuestions.filter(({ q }) => (currentUser && Array.isArray(currentUser.solved)) && currentUser.solved.includes(q.id)).length;
 
     const header = document.createElement("div");
-    header.className = "module-row-header";
+    header.className = `sidebar-module-header mod-${mod.id}`;
     header.innerHTML = `
-      <span class="module-row-pill mod-${mod.id}">Mod 0${mod.id}</span>
-      <span class="module-row-name" title="${mod.name}">${mod.name}</span>
-      <span class="module-row-count">(${modQuestions.length})</span>
+      <span>Mod 0${mod.id}: ${mod.name}</span>
+      <span class="sidebar-module-stat">${solvedInMod}/${modQuestions.length}</span>
     `;
-
-    const badgesContainer = document.createElement("div");
-    badgesContainer.className = "module-row-badges";
+    group.appendChild(header);
 
     modQuestions.forEach(({ q, idx }) => {
       const isSolved = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved.includes(q.id) : false;
+      const isActive = idx === currentIndex;
+
+      const card = document.createElement("div");
+      card.className = `sidebar-task-card ${isActive ? "active" : ""} ${isSolved ? "completed" : ""}`;
+      card.id = `sidebarTask_${idx}`;
+      card.onclick = () => loadQuestion(idx);
+
       const badge = document.createElement("div");
-      badge.className = `q-badge ${idx === currentIndex ? "current" : ""} ${isSolved ? "completed" : ""}`;
-      badge.innerText = q.id;
-      badge.title = `Task ${q.id}: ${q.title}`;
-      badge.onclick = () => loadQuestion(idx);
-      badgesContainer.appendChild(badge);
+      badge.className = "sidebar-task-badge";
+      badge.innerHTML = isSolved ? "✓" : q.id;
+
+      const info = document.createElement("div");
+      info.className = "sidebar-task-info";
+      info.innerHTML = `
+        <div class="sidebar-task-title" title="${q.title}">${q.title}</div>
+        <div class="sidebar-task-meta">
+          <span>+${q.points || 100} pts</span>
+          <span>•</span>
+          <span style="opacity:0.8;">${q.target ? q.target.split(' ')[0] : 'Lab'}</span>
+        </div>
+      `;
+
+      card.appendChild(badge);
+      card.appendChild(info);
+      group.appendChild(card);
     });
 
-    row.appendChild(header);
-    row.appendChild(badgesContainer);
-    elQuestionGrid.appendChild(row);
+    elQuestionGrid.appendChild(group);
   });
+
+  // Scroll active task into view within sidebar
+  const activeCard = document.getElementById(`sidebarTask_${currentIndex}`);
+  if (activeCard) {
+    activeCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+}
+
+function filterSidebarTasks() {
+  renderQuestionGrid();
+}
+
+function toggleSidebar() {
+  const sidebar = document.getElementById("modulesSidebar");
+  const btn = document.getElementById("btnToggleSidebar");
+  if (sidebar) {
+    sidebar.classList.toggle("collapsed");
+    const isCollapsed = sidebar.classList.contains("collapsed");
+    if (btn) {
+      btn.style.opacity = isCollapsed ? "0.6" : "1";
+    }
+  }
 }
 
 // Update User & Mode UI
@@ -387,8 +429,13 @@ function updateProgress() {
   const total = CEH_QUESTIONS.length;
   const done = currentUser ? currentUser.solved.length : 0;
   const pct = Math.round((done / total) * 100);
-  elProgressBarFill.style.width = `${pct}%`;
-  elProgressText.innerText = `${done} / ${total} (${pct}%)`;
+  if (elProgressBarFill) elProgressBarFill.style.width = `${pct}%`;
+  if (elProgressText) elProgressText.innerText = `${done} / ${total} (${pct}%)`;
+
+  const elSidebarPct = document.getElementById("sidebarProgressPct");
+  const elSidebarFill = document.getElementById("sidebarProgressFill");
+  if (elSidebarPct) elSidebarPct.innerText = `${done} / ${total} (${pct}%)`;
+  if (elSidebarFill) elSidebarFill.style.width = `${pct}%`;
 }
 
 // Evaluate Command
