@@ -1745,3 +1745,201 @@ header {
   align-items: center;
   justify-content: space-between;
 }
+
+
+/* ========================================================
+   Floating CLI Intellisense HUD Popup & Argument Breakdown
+   ======================================================== */
+.cli-intellisense-hud {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 14px;
+  right: 14px;
+  background: rgba(10, 16, 28, 0.96);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 229, 255, 0.38);
+  border-radius: 8px;
+  padding: 10px 14px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.8), 0 0 24px rgba(0, 229, 255, 0.15);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: hudSlideUp 0.18s ease-out;
+}
+
+@keyframes hudSlideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.hud-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hud-token-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.hud-badge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+.hud-badge.tool { background: rgba(0, 229, 255, 0.2); color: var(--accent-cyan); border: 1px solid rgba(0, 229, 255, 0.4); }
+.hud-badge.arg { background: rgba(255, 214, 0, 0.2); color: var(--accent-yellow); border: 1px solid rgba(255, 214, 0, 0.4); }
+.hud-badge.target { background: rgba(0, 230, 118, 0.2); color: var(--accent-green); border: 1px solid rgba(0, 230, 118, 0.4); }
+.hud-badge.option { background: rgba(179, 136, 255, 0.2); color: var(--accent-purple); border: 1px solid rgba(179, 136, 255, 0.4); }
+
+.hud-token-name {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+.hud-type-label {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+}
+
+.hud-status-badge {
+  font-size: 0.68rem;
+  color: var(--accent-cyan);
+  background: rgba(0, 229, 255, 0.08);
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 229, 255, 0.2);
+}
+
+.hud-body-text {
+  font-size: 0.78rem;
+  color: #e0e6ed;
+  line-height: 1.45;
+}
+
+.hud-footer-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 5px;
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.hud-footer-hint code {
+  color: var(--accent-yellow);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+}
+
+/* Argument Breakdown Card Enhancements in Left Manual Pane */
+.cmd-args-breakdown {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.arg-chip-card {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: all 0.2s;
+}
+
+.arg-chip-card:hover {
+  border-color: rgba(0, 229, 255, 0.3);
+  background: rgba(0, 229, 255, 0.03);
+}
+
+.arg-chip-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.arg-chip-code {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-yellow);
+  background: rgba(255, 214, 0, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.arg-chip-code.tool {
+  color: var(--accent-cyan);
+  background: rgba(0, 229, 255, 0.1);
+}
+.arg-chip-code.target {
+  color: var(--accent-green);
+  background: rgba(0, 230, 118, 0.1);
+}
+
+.arg-chip-name {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.arg-chip-desc {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.cmd-alt-args-box {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alt-args-label {
+  font-size: 0.72rem;
+  color: var(--accent-cyan);
+  font-weight: 700;
+}
+
+.alt-args-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.alt-arg-tag {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
+  padding: 3px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.alt-arg-tag code {
+  color: var(--accent-yellow);
+  font-family: var(--font-mono);
+  font-weight: 700;
+}

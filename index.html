@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CEH v13 Interactive Lab Walkthrough (Modules 1 - 5) | NetAcad & CTF</title>
-  <link rel="stylesheet" href="style.css?v=20261020_v4">
+  <link rel="stylesheet" href="style.css?v=20261020_v5">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap" rel="stylesheet">
@@ -215,21 +215,37 @@
           <strong>Target:</strong> 10.10.1.22
         </div>
 
-        <!-- Required Command to Execute (Prominently displayed right after Title / Target) -->
+        <!-- Command Syntax & Argument Breakdown Card -->
         <div class="required-command-card" id="commandCard">
           <div class="cmd-card-header">
             <span class="cmd-badge">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-              REQUIRED COMMAND TO EXECUTE
+              COMMAND SYNTAX &amp; ARGUMENT BREAKDOWN
             </span>
-            <span class="cmd-typing-note">⌨️ Manual Typing Enforced</span>
+            <span class="cmd-typing-note">⚡ Live CLI Intellisense Tracking</span>
           </div>
-          <div class="cmd-display-box no-copy" title="Copy disabled: Type manually into terminal">
+
+          <!-- Command Syntax Formula -->
+          <div class="cmd-display-box no-copy" title="Command structure formula">
             <span class="cmd-prompt-sym">$</span>
             <code id="taskRequiredCommand" class="cmd-code-text">ping -c 4 10.10.1.22</code>
           </div>
+
+          <!-- Real-time Argument Breakdown Chips -->
+          <div class="cmd-args-breakdown" id="cmdArgsBreakdown">
+            <!-- Injected dynamically by app.js -->
+          </div>
+
+          <!-- Accepted Alternate Arguments / Pro Flags Box -->
+          <div class="cmd-alt-args-box" id="cmdAltArgsBox">
+            <span class="alt-args-label">✨ Valid Argument Variations Accepted:</span>
+            <div class="alt-args-tags" id="cmdAltArgsTags">
+              <!-- Injected dynamically by app.js -->
+            </div>
+          </div>
+
           <div class="cmd-help-hint">
-            <span>Type the exact command above into the terminal input on the right and press <kbd>Enter</kbd>.</span>
+            <span>💡 <strong>Real-time HUD:</strong> Type in the terminal on the right. A floating Intellisense popup will track each command, argument, and target live!</span>
           </div>
         </div>
 
@@ -334,8 +350,26 @@
         <div id="trackerTip" class="tracker-tip">Start typing to track your characters...</div>
       </div>
 
-      <!-- Terminal Input Field (with Paste Warning Toast) -->
+      <!-- Terminal Input Field (with Live Floating Intellisense HUD) -->
       <div class="terminal-input-wrapper">
+        <!-- Floating CLI Intellisense Parameter HUD Popup -->
+        <div id="cliIntellisenseHud" class="cli-intellisense-hud" style="display: none;">
+          <div class="hud-top-bar">
+            <div class="hud-token-group">
+              <span class="hud-badge tool" id="hudBadge">COMMAND</span>
+              <code class="hud-token-name" id="hudTokenName">nmap</code>
+              <span class="hud-type-label" id="hudTypeLabel">Network Scanner</span>
+            </div>
+            <div class="hud-status-badge">⚡ Live Parameter Guide</div>
+          </div>
+          <div class="hud-body-text" id="hudBodyText">
+            Network exploration tool and security scanner used for host discovery and port enumeration.
+          </div>
+          <div class="hud-footer-hint" id="hudFooterHint">
+            <span>💡 Pro Tip:</span> <span id="hudFooterTipText">Type a space then flags like <code>-sS</code> (SYN scan) or <code>-sV</code> (version probe).</span>
+          </div>
+        </div>
+
         <div id="pasteToast" class="paste-warning-toast">
           ⚠️ Copy-paste is disabled! Type manually to build CLI muscle memory.
         </div>
@@ -644,7 +678,7 @@
     </div>
   </div>
 
-  <script src="questions.js?v=20261020_v4"></script>
-  <script src="app.js?v=20261020_v4"></script>
+  <script src="questions.js?v=20261020_v5"></script>
+  <script src="app.js?v=20261020_v5"></script>
 </body>
 </html>

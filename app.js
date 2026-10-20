@@ -182,11 +182,11 @@ function loadQuestion(idx) {
   elTaskTitle.innerText = `Task ${q.id}: ${q.title}`;
   elTargetBadge.innerHTML = `<strong>Target:</strong> ${q.target}`;
 
-  // Update Required Command Box
-  const elTaskRequiredCommand = document.getElementById("taskRequiredCommand");
-  if (elTaskRequiredCommand) {
-    elTaskRequiredCommand.innerText = q.solution || "";
-  }
+  // Update Command Syntax & Argument Breakdown
+  renderCommandBreakdown(q);
+  const hud = document.getElementById("cliIntellisenseHud");
+  if (hud) hud.style.display = "none";
+  updateCliIntellisense("");
 
   elScenarioText.innerText = q.scenario;
   elTaskText.innerText = q.task;
@@ -464,6 +464,26 @@ function evaluateCommand(userCmd) {
     } else if (rule instanceof RegExp && rule.test(trimmed)) {
       isCorrect = true;
       break;
+    }
+  }
+
+  // Flexible argument fallback: check if stripping harmless pro flags (-Pn, -T4, -T3, -v, -vv, --reason, sudo ) matches
+  if (!isCorrect) {
+    const stripped = trimmed
+      .replace(/^sudo\s+/i, "")
+      .replace(/\s+(-Pn|-pn)\b/g, "")
+      .replace(/\s+(-T[0-5])\b/gi, "")
+      .replace(/\s+(-v|-vv|--reason)\b/g, "")
+      .trim();
+
+    for (let rule of q.accepted) {
+      if (typeof rule === "string" && stripped.toLowerCase() === rule.toLowerCase()) {
+        isCorrect = true;
+        break;
+      } else if (rule instanceof RegExp && rule.test(stripped)) {
+        isCorrect = true;
+        break;
+      }
     }
   }
 
@@ -2524,9 +2544,12 @@ elTerminalInput.addEventListener("keydown", (e) => {
     if (val.trim()) {
       commandHistory.push(val);
       historyIndex = commandHistory.length;
+      const hud = document.getElementById("cliIntellisenseHud");
+      if (hud) hud.style.display = "none";
       evaluateCommand(val);
       elTerminalInput.value = "";
       updateKeystrokeTracker("");
+      updateCliIntellisense("");
     }
   } else if (e.key === "ArrowUp") {
     e.preventDefault();
@@ -2534,6 +2557,7 @@ elTerminalInput.addEventListener("keydown", (e) => {
       historyIndex--;
       elTerminalInput.value = commandHistory[historyIndex];
       updateKeystrokeTracker(elTerminalInput.value);
+      updateCliIntellisense(elTerminalInput.value);
     }
   } else if (e.key === "ArrowDown") {
     e.preventDefault();
@@ -2541,17 +2565,20 @@ elTerminalInput.addEventListener("keydown", (e) => {
       historyIndex++;
       elTerminalInput.value = commandHistory[historyIndex];
       updateKeystrokeTracker(elTerminalInput.value);
+      updateCliIntellisense(elTerminalInput.value);
     } else {
       historyIndex = commandHistory.length;
       elTerminalInput.value = "";
       updateKeystrokeTracker("");
+      updateCliIntellisense("");
     }
   }
 });
 
-// 4. Live typing highlight tracking on every key pressed!
+// 4. Live typing highlight tracking & Intellisense Parameter HUD!
 elTerminalInput.addEventListener("input", () => {
   updateKeystrokeTracker(elTerminalInput.value);
+  updateCliIntellisense(elTerminalInput.value);
 });
 
 // 5. Block copy on solution and manual areas
@@ -2596,6 +2623,513 @@ window.addEventListener("keydown", (e) => {
     });
   }
 });
+
+// ========================================================
+// CLI Intelligence & Real-Time Parameter Intellisense HUD
+// ========================================================
+const CLI_KNOWLEDGE_BASE = {
+  // Primary Utilities & Tools
+  tools: {
+    "nmap": {
+      name: "Network Mapper (Nmap)",
+      category: "Port Scanner & Recon",
+      desc: "Core port scanner & network discovery utility used to identify alive hosts, open listening ports, daemon versions, and OS fingerprints.",
+      tip: "Pro Tip: Type flags like <code>-sS</code> (SYN stealth), <code>-sV</code> (version probe), <code>-O</code> (OS detection), or target IP."
+    },
+    "ping": {
+      name: "Packet Internet Groper (Ping)",
+      category: "ICMP Diagnostics",
+      desc: "Sends ICMP ECHO_REQUEST packets to network hosts to verify connectivity, latency, and packet loss.",
+      tip: "Pro Tip: Use <code>-c &lt;count&gt;</code> to set number of echo requests (e.g. <code>ping -c 4 10.10.1.22</code>)."
+    },
+    "traceroute": {
+      name: "Traceroute Diagnostic",
+      category: "Path & Hop Recon",
+      desc: "Traces the Layer 3 route packets take to destination, revealing intermediate gateway routers and hop latencies.",
+      tip: "Pro Tip: Uses ICMP/UDP with incrementing TTL values to map network topology."
+    },
+    "tracert": {
+      name: "Traceroute Diagnostic (Windows)",
+      category: "Path & Hop Recon",
+      desc: "Windows utility tracing the route to destination host using ICMP echo requests.",
+      tip: "Pro Tip: Use <code>-d</code> to avoid resolving IP addresses to hostnames."
+    },
+    "curl": {
+      name: "Client URL (cURL)",
+      category: "HTTP Banner Grabbing",
+      desc: "Command-line tool for transferring data with URLs. Used for testing web endpoints, fetching HTTP response headers, and banner grabbing.",
+      tip: "Pro Tip: Use <code>-I</code> to retrieve HTTP response headers without downloading the body."
+    },
+    "dig": {
+      name: "Domain Information Groper",
+      category: "DNS Reconnaissance",
+      desc: "Flexible DNS interrogation tool for querying DNS name servers, verifying MX records, NS delegations, and zone transfers.",
+      tip: "Pro Tip: Common queries: <code>mx</code> (mail servers), <code>ns</code> (nameservers), <code>axfr</code> (zone transfer attempt)."
+    },
+    "nslookup": {
+      name: "Name Server Lookup",
+      category: "DNS Interrogation",
+      desc: "Network administration tool for querying Domain Name System (DNS) servers to obtain domain name or IP address mappings.",
+      tip: "Pro Tip: Use <code>-type=ns</code> or <code>-type=soa</code> to query specific DNS resource record types."
+    },
+    "nbtstat": {
+      name: "NetBIOS over TCP/IP Diagnostics",
+      category: "Windows NetBIOS Recon",
+      desc: "Displays NetBIOS protocol statistics, local name tables, and remote computer name tables mapped via TCP/IP.",
+      tip: "Pro Tip: Use <code>-a &lt;IP&gt;</code> to query remote NetBIOS name table, or <code>-c</code> to dump local NetBIOS cache."
+    },
+    "net": {
+      name: "Windows Net Command",
+      category: "Windows Resource Admin",
+      desc: "Manages network resources, mapped SMB shares, user accounts, and services in Windows and Samba environments.",
+      tip: "Pro Tip: Use <code>net use</code> to display currently mapped shared folders and active SMB connections."
+    },
+    "snmpwalk": {
+      name: "SNMP Subtree Query",
+      category: "SNMP Enumeration",
+      desc: "Queries target network devices via SNMP GETNEXT requests to extract an entire subtree of MIB management values.",
+      tip: "Pro Tip: Use <code>-v1</code> or <code>-v2c</code> with community string <code>-c public</code> followed by the target IP."
+    },
+    "python3": {
+      name: "Python Interpreter",
+      category: "Script Execution",
+      desc: "Executes Python scripts, custom exploits, and automated security scanning tools (such as <code>rpc-scan.py</code>).",
+      tip: "Pro Tip: Pass arguments like <code>--rpc</code> to invoke specific RPC enumeration functions."
+    },
+    "enum4linux": {
+      name: "Enum4Linux Recon Utility",
+      category: "SMB & Active Directory Recon",
+      desc: "Perl tool designed to enumerate security information from Windows and Samba systems (users, shares, password policies, groups).",
+      tip: "Pro Tip: Use <code>-U</code> for user accounts, <code>-S</code> for shares, or <code>-a</code> for full enumeration."
+    },
+    "sgpt": {
+      name: "ShellGPT (AI CLI Assistant)",
+      category: "AI-Powered Recon & Automation",
+      desc: "OpenAI-powered command-line interface that translates plain natural language requests directly into executable shell commands.",
+      tip: "Pro Tip: Use <code>--shell</code> with a prompt string in quotes, and optionally <code>--chat &lt;session&gt;</code> to maintain conversational context."
+    },
+    "nikto": {
+      name: "Nikto Web Vulnerability Scanner",
+      category: "Web Server Security Auditor",
+      desc: "Tests web servers against 6,700+ dangerous files/CGIs, outdated software versions, and common server misconfigurations.",
+      tip: "Pro Tip: Use <code>-h &lt;target_url&gt;</code> to target the remote web application (e.g. <code>nikto -h http://10.10.1.22</code>)."
+    },
+    "searchsploit": {
+      name: "SearchSploit (Exploit-DB CLI)",
+      category: "Exploit Research & PoC Lookup",
+      desc: "Command-line search tool for Exploit-Database. Enables offline searches through thousands of public exploits and shellcodes.",
+      tip: "Pro Tip: Search for CVE numbers, OS versions, or vulnerability codes like <code>ms17-010</code>."
+    },
+    "hping3": {
+      name: "Custom Packet Crafter",
+      category: "Advanced Packet Crafting",
+      desc: "Network tool capable of sending custom TCP/UDP/ICMP packets and analyzing replies for firewall auditing and advanced probing.",
+      tip: "Pro Tip: Use <code>-S</code> for SYN mode, <code>-p &lt;port&gt;</code> for port targeting, <code>-c &lt;count&gt;</code>."
+    },
+    "smbclient": {
+      name: "SMB / CIFS Client",
+      category: "Network Share Access",
+      desc: "Client tool for accessing and enumerating shared resources (SMB/CIFS) on Windows and Samba file servers.",
+      tip: "Pro Tip: Use <code>-L &lt;target&gt;</code> to list available shares and <code>-N</code> for anonymous null session."
+    },
+    "hydra": {
+      name: "THC Hydra Network Logon Cracker",
+      category: "Online Password Brute-Forcer",
+      desc: "High-speed parallelized network authentication cracking tool supporting dozens of protocols (SSH, FTP, HTTP, SMB, RDP).",
+      tip: "Pro Tip: Specify <code>-l &lt;user&gt;</code> or <code>-L &lt;wordlist&gt;</code> and <code>-p &lt;pass&gt;</code> or <code>-P &lt;wordlist&gt;</code>."
+    },
+    "wpscan": {
+      name: "WordPress Security Scanner",
+      category: "CMS Security Scanner",
+      desc: "Black-box WordPress security scanner detecting core vulnerabilities, vulnerable plugins, and user accounts.",
+      tip: "Pro Tip: Use <code>--url &lt;target&gt;</code> and <code>-e u,vp</code> to enumerate users and vulnerable plugins."
+    },
+    "whois": {
+      name: "WHOIS Domain Registrar Query",
+      category: "Passive Reconnaissance",
+      desc: "Queries regional Internet registries for domain ownership, registrar information, DNS nameservers, and IP allocations.",
+      tip: "Pro Tip: Generates zero network packets to the actual target servers."
+    },
+    "msfconsole": {
+      name: "Metasploit Framework Console",
+      category: "Exploitation Platform",
+      desc: "All-in-one penetration testing platform with exploit modules, payloads, auxiliary scanners, and post-exploitation tools.",
+      tip: "Pro Tip: Use <code>search</code> to find modules and <code>use &lt;module&gt;</code> to load them."
+    }
+  },
+
+  // Flags & Parameters Dictionary
+  flags: {
+    // Nmap Flags
+    "-ss": { name: "TCP SYN Stealth Scan", type: "Scan Type", desc: "Half-open scan. Sends SYN, target returns SYN/ACK, scanner immediately replies RST to abort connection before logging." },
+    "-st": { name: "TCP Full Connect Scan", type: "Scan Type", desc: "Completes the full 3-way handshake (SYN -> SYN/ACK -> ACK). Slower, logs connections, used when unprivileged." },
+    "-su": { name: "UDP Port Scan", type: "Scan Type", desc: "Sends empty UDP packets to ports. Open/filtered ports return no reply; closed ports return ICMP Port Unreachable." },
+    "-sv": { name: "Service Version Detection", type: "Detection", desc: "Probes open listening ports with application payloads to extract exact daemon names and version numbers." },
+    "-o": { name: "Operating System Detection", type: "Detection", desc: "Sends probe packets and compares TCP/IP stack implementation responses against Nmap OS fingerprint database." },
+    "-a": { name: "Aggressive Scan Mode", type: "Scan Mode", desc: "Enables OS detection (-O), service version detection (-sV), Nmap script scanning (-sC), and traceroute (--traceroute)." },
+    "-pn": { name: "Skip Host Discovery", type: "Bypass", desc: "Treats all target hosts as online. Bypasses firewalls that block ICMP echo ping packets." },
+    "-sn": { name: "Ping Sweep / No Port Scan", type: "Discovery", desc: "Only determines which target hosts are online without conducting any port scanning." },
+    "-p": { name: "Port Specification", type: "Targeting", desc: "Specifies target ports to probe (e.g. -p 80,445 or -p 1-1000 or -p- for all 65,535 ports)." },
+    "-p-": { name: "All 65,535 Ports", type: "Port Range", desc: "Scans every single port from 1 to 65535 instead of the top 1,000 default ports." },
+    "-t4": { name: "Aggressive Timing Template", type: "Performance", desc: "Shortens probe timeouts and speeds up scan execution. Ideal for fast, reliable lab and local networks." },
+    "-t2": { name: "Polite Timing Template", type: "Evasion", desc: "Slows scan down to consume minimal target bandwidth and reduce IDS/IPS alert thresholds." },
+    "-f": { name: "Packet Fragmentation", type: "Firewall Evasion", desc: "Splits TCP header across 8-byte fragments to evade packet filtering devices and inspection firewalls." },
+    "-d": { name: "Decoy Cloaking Scan", type: "Evasion", desc: "Spoofs random decoy IP addresses alongside real scanner IP (e.g. -D RND:5) to conceal the origin of scan." },
+    "-g": { name: "Source Port Override", type: "Firewall Bypass", desc: "Transmits scan packets originating from a specific source port (e.g. -g 80) to bypass stateful filtering rules." },
+    "-v": { name: "Verbose Output", type: "Verbosity", desc: "Increases verbosity level to display open ports dynamically in real time as they are found." },
+    "--script": { name: "Nmap Scripting Engine (NSE)", type: "Scripts", desc: "Executes automated Lua vulnerability and discovery scripts (e.g. --script vuln, smb-os-discovery.nse, banner)." },
+
+    // Ping & Traceroute Flags
+    "-c": { name: "Packet Count", type: "Argument", desc: "Specifies the exact number of ICMP echo packets to transmit before exiting." },
+    "-i": { name: "Packet Interval", type: "Timing", desc: "Wait interval in seconds between transmitting each packet (default is 1s)." },
+    "-m": { name: "Maximum Hops", type: "Routing", desc: "Specifies the maximum number of network hops (TTL) to trace before terminating." },
+    "-n": { name: "Numeric Addresses Only", type: "Format", desc: "Displays IP addresses numerically without performing time-consuming reverse DNS lookups." },
+
+    // Curl Flags
+    "-i": { name: "HTTP Response Headers Only", type: "Inspection", desc: "Capital -I: Fetches HTTP response headers only without downloading page body. Used for banner grabbing." },
+
+    // Nbtstat & Net Flags
+    "-a": { name: "Remote NetBIOS IP / Name Query", type: "NetBIOS", desc: "Dumps remote machine NetBIOS name table (capital -A queries IP, lowercase -a queries hostname)." },
+    "use": { name: "Map Remote Share / Drive", type: "Subcommand", desc: "Connects a local drive letter to, or disconnects from, a shared network folder (SMB)." },
+
+    // Enum4linux Flags
+    "-u": { name: "Enumerate User Accounts", type: "User Recon", desc: "Queries target Windows/Samba host for list of local user accounts via RPC and RID cycling." },
+    "-s": { name: "Enumerate SMB Shares", type: "Share Recon", desc: "Extracts all public and administrative shares (C$, ADMIN$, IPC$) and tests access permissions." },
+    "-p": { name: "Extract Password Policy", type: "Policy Recon", desc: "Retrieves target password complexity requirements, minimum length, and account lockout thresholds." },
+
+    // SNMP Flags
+    "-v1": { name: "SNMP Protocol Version 1", type: "Version", desc: "Uses SNMPv1 (unencrypted community string authentication)." },
+    "-v2c": { name: "SNMP Protocol Version 2c", type: "Version", desc: "Uses SNMPv2c with community strings; standard in most enterprise management environments." },
+    "-v3": { name: "SNMP Protocol Version 3", type: "Version", desc: "Uses SNMPv3 with user-based security model (USM) providing authentication and encryption." },
+    "public": { name: "Default SNMP Community", type: "Community", desc: "Standard read-only community string commonly configured by default on network equipment." },
+
+    // Dig & DNS Flags
+    "axfr": { name: "Authoritative Zone Transfer", type: "DNS Query", desc: "Requests a complete replication/dump of the DNS zone file containing all target subdomains." },
+    "any": { name: "Query All DNS Records", type: "DNS Query", desc: "Requests all available DNS records (A, AAAA, CNAME, MX, TXT, SOA) for the domain." },
+    "mx": { name: "Mail Exchange Query", type: "DNS Query", desc: "Queries DNS for mail transfer agents (MX) designated to accept incoming email for domain." },
+    "ns": { name: "Nameserver Query", type: "DNS Query", desc: "Queries DNS for authoritative name server hosts responsible for resolving records in the zone." },
+    "soa": { name: "Start of Authority Query", type: "DNS Query", desc: "Queries DNS Start of Authority record showing primary DNS master server, admin email, and serial." },
+
+    // Nslookup Flags
+    "-type=ns": { name: "Nameserver Record Query", type: "DNS Query", desc: "Instructs nslookup to request authoritative nameserver records for the domain." },
+    "-type=soa": { name: "Start of Authority Query", type: "DNS Query", desc: "Instructs nslookup to request Start of Authority administrative record." },
+    "-type=any": { name: "All Records Query", type: "DNS Query", desc: "Instructs nslookup to request all available DNS records." },
+
+    // ShellGPT Flags
+    "--shell": { name: "Shell Mode Execution", type: "AI Action", desc: "Instructs ShellGPT to generate and prompt execution of a shell command based on natural language." },
+    "--chat": { name: "Conversational Session", type: "AI State", desc: "Maintains contextual conversational memory across ShellGPT commands in named session." },
+
+    // RPC & Exploit
+    "--rpc": { name: "RPC Enumeration Mode", type: "RPC Query", desc: "Executes Remote Procedure Call endpoint enumeration against target Windows services." },
+    "ms17-010": { name: "EternalBlue Exploit Search", type: "Vulnerability ID", desc: "Exploit-DB query for MS17-010 Windows SMB Remote Code Execution vulnerability." }
+  }
+};
+
+// Real-Time CLI Parameter Intellisense HUD Updater
+function updateCliIntellisense(rawInput) {
+  const hud = document.getElementById("cliIntellisenseHud");
+  const hudBadge = document.getElementById("hudBadge");
+  const hudTokenName = document.getElementById("hudTokenName");
+  const hudTypeLabel = document.getElementById("hudTypeLabel");
+  const hudBodyText = document.getElementById("hudBodyText");
+  const hudFooterTipText = document.getElementById("hudFooterTipText");
+
+  if (!hud || !hudBadge || !hudTokenName || !hudTypeLabel || !hudBodyText || !hudFooterTipText) return;
+
+  if (!rawInput || !rawInput.trim()) {
+    hud.style.display = "none";
+    return;
+  }
+
+  const trimmed = rawInput.trim();
+  const endsWithSpace = rawInput.endsWith(" ");
+  const tokens = trimmed.split(/\s+/);
+  const currentToken = tokens[tokens.length - 1];
+  const toolName = tokens[0].toLowerCase();
+  const lowerToken = currentToken.toLowerCase();
+
+  // 1. Tool Matching (First token, no space yet)
+  if (tokens.length === 1 && !endsWithSpace) {
+    const toolInfo = CLI_KNOWLEDGE_BASE.tools[toolName];
+    if (toolInfo) {
+      hudBadge.className = "hud-badge tool";
+      hudBadge.innerText = "COMMAND TOOL";
+      hudTokenName.innerText = tokens[0];
+      hudTypeLabel.innerText = toolInfo.category;
+      hudBodyText.innerText = toolInfo.desc;
+      hudFooterTipText.innerHTML = toolInfo.tip;
+      hud.style.display = "flex";
+      return;
+    }
+  }
+
+  // 2. Next Expected Arguments Hint (Right after typing tool name and pressing space)
+  if (tokens.length === 1 && endsWithSpace) {
+    const toolInfo = CLI_KNOWLEDGE_BASE.tools[toolName];
+    if (toolInfo) {
+      hudBadge.className = "hud-badge option";
+      hudBadge.innerText = "NEXT ARGUMENTS";
+      hudTokenName.innerText = `${tokens[0]} [flags...]`;
+      hudTypeLabel.innerText = "Syntax Helper";
+      hudBodyText.innerText = `Command '${tokens[0]}' selected. Now specify scan flags, arguments, or target.`;
+      hudFooterTipText.innerHTML = toolInfo.tip;
+      hud.style.display = "flex";
+      return;
+    }
+  }
+
+  // 3. Target IP Address Matching
+  if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}(\/\d{1,2})?$/.test(currentToken)) {
+    hudBadge.className = "hud-badge target";
+    hudBadge.innerText = "TARGET HOST";
+    hudTokenName.innerText = currentToken;
+    hudTypeLabel.innerText = "Destination IP / Subnet";
+    const isLabTarget = currentToken === "10.10.1.22" || currentToken === "10.10.1.11" || currentToken === "10.10.1.19";
+    hudBodyText.innerText = isLabTarget
+      ? `In-scope target system for this CEH exercise (${currentToken}).`
+      : `Network target IP address (${currentToken}).`;
+    hudFooterTipText.innerHTML = "Make sure the target IP matches the task requirements on the left.";
+    hud.style.display = "flex";
+    return;
+  }
+
+  // 4. Target Domain Name Matching
+  if (currentToken.includes(".") && !currentToken.startsWith("-") && !currentToken.endsWith(".nse") && !currentToken.endsWith(".py") && /[a-zA-Z]/.test(currentToken)) {
+    hudBadge.className = "hud-badge target";
+    hudBadge.innerText = "TARGET DOMAIN";
+    hudTokenName.innerText = currentToken;
+    hudTypeLabel.innerText = "FQDN Domain Target";
+    hudBodyText.innerText = `In-scope target domain under agreed Rules of Engagement (${currentToken}).`;
+    hudFooterTipText.innerHTML = "DNS or web queries will query this domain to discover records, subdomains, and hosts.";
+    hud.style.display = "flex";
+    return;
+  }
+
+  // 5. DNS Direct Server (@server)
+  if (currentToken.startsWith("@")) {
+    hudBadge.className = "hud-badge target";
+    hudBadge.innerText = "DNS SERVER";
+    hudTokenName.innerText = currentToken;
+    hudTypeLabel.innerText = "Target Nameserver";
+    hudBodyText.innerText = `Directs DNS query specifically to nameserver host ${currentToken.slice(1)}.`;
+    hudFooterTipText.innerHTML = "Direct querying tests if this nameserver permits unrestricted zone transfers (axfr).";
+    hud.style.display = "flex";
+    return;
+  }
+
+  // 6. Specific Known Flag matching
+  const flagInfo = CLI_KNOWLEDGE_BASE.flags[lowerToken];
+  if (flagInfo) {
+    hudBadge.className = "hud-badge arg";
+    hudBadge.innerText = "CLI ARGUMENT";
+    hudTokenName.innerText = currentToken;
+    hudTypeLabel.innerText = flagInfo.type;
+    hudBodyText.innerText = flagInfo.desc;
+    hudFooterTipText.innerHTML = `<strong>${flagInfo.name}</strong>. Provide target host or next parameter.`;
+    hud.style.display = "flex";
+    return;
+  }
+
+  // 7. Port flag (e.g. -p 53,161 or -p 445 or -p 389)
+  if (lowerToken.startsWith("-p") && lowerToken.length > 2) {
+    hudBadge.className = "hud-badge arg";
+    hudBadge.innerText = "PORT FILTER";
+    hudTokenName.innerText = currentToken;
+    hudTypeLabel.innerText = "Port Targeting";
+    hudBodyText.innerText = `Limits scan strictly to specified port(s): ${currentToken.slice(2)}.`;
+    hudFooterTipText.innerHTML = "Speeds up scan significantly compared to scanning 1,000+ default ports.";
+    hud.style.display = "flex";
+    return;
+  }
+
+  // 8. NSE script (e.g. --script vuln or smb-os-discovery.nse)
+  if (lowerToken.includes("script") || lowerToken.endsWith(".nse")) {
+    hudBadge.className = "hud-badge option";
+    hudBadge.innerText = "NSE SCRIPT";
+    hudTokenName.innerText = currentToken;
+    hudTypeLabel.innerText = "Nmap Scripting Engine";
+    hudBodyText.innerText = `Executes automated security audit / detection script (${currentToken}).`;
+    hudFooterTipText.innerHTML = "Scripts run in parallel to probe for vulnerabilities, banners, or service information.";
+    hud.style.display = "flex";
+    return;
+  }
+
+  // 9. Generic Flag (-something)
+  if (currentToken.startsWith("-")) {
+    hudBadge.className = "hud-badge arg";
+    hudBadge.innerText = "FLAG / OPTION";
+    hudTokenName.innerText = currentToken;
+    hudTypeLabel.innerText = "Command Parameter";
+    hudBodyText.innerText = `Command-line flag modifier passed to '${tokens[0]}'.`;
+    hudFooterTipText.innerHTML = "Check the Argument Breakdown in the left pane for acceptable parameters.";
+    hud.style.display = "flex";
+    return;
+  }
+
+  // Hide if no match
+  hud.style.display = "none";
+}
+
+// Render Command Breakdown & Arguments in the Left Manual Pane
+function renderCommandBreakdown(q) {
+  const container = document.getElementById("cmdArgsBreakdown");
+  const altBox = document.getElementById("cmdAltArgsTags");
+  const taskCmdEl = document.getElementById("taskRequiredCommand");
+  if (!container || !q) return;
+
+  container.innerHTML = "";
+  if (altBox) altBox.innerHTML = "";
+
+  const solution = q.solution || "";
+  if (taskCmdEl) {
+    taskCmdEl.innerText = solution;
+  }
+
+  // Tokenize preserving quoted strings
+  const regex = /(?:[^\s"']+|"[^"]*"|'[^']*')+/g;
+  const rawTokens = solution.match(regex) || [];
+  const tool = rawTokens[0] ? rawTokens[0].toLowerCase() : "";
+
+  rawTokens.forEach((token, idx) => {
+    const card = document.createElement("div");
+    card.className = "arg-chip-card";
+
+    let chipType = "arg";
+    let chipCodeClass = "";
+    let chipName = "Parameter";
+    let chipDesc = "Command-line argument passed to utility.";
+
+    const lowerTok = token.toLowerCase();
+
+    if (idx === 0) {
+      chipType = "tool";
+      chipCodeClass = "tool";
+      const tInfo = CLI_KNOWLEDGE_BASE.tools[lowerTok];
+      chipName = tInfo ? tInfo.name : "Primary Binary";
+      chipDesc = tInfo ? tInfo.desc : "Executable command or tool.";
+    } else if (token.startsWith('"') || token.startsWith("'")) {
+      chipType = "option";
+      chipCodeClass = "";
+      chipName = "Natural Language Prompt";
+      chipDesc = "Instruction string passed to AI assistant to synthesize command.";
+    } else if (/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(token) || (token.includes(".") && !token.startsWith("-") && !token.endsWith(".py") && !token.endsWith(".nse"))) {
+      chipType = "target";
+      chipCodeClass = "target";
+      chipName = "Target Machine / IP";
+      chipDesc = `In-scope destination target system (${token}).`;
+    } else if (token.startsWith("@")) {
+      chipType = "target";
+      chipCodeClass = "target";
+      chipName = "DNS Server Target";
+      chipDesc = `Nameserver queried directly for DNS records (${token}).`;
+    } else {
+      // Flag or argument
+      const fInfo = CLI_KNOWLEDGE_BASE.flags[lowerTok];
+      if (fInfo) {
+        chipName = fInfo.name;
+        chipDesc = fInfo.desc;
+      } else if (lowerTok.startsWith("-p") && lowerTok.length > 2) {
+        chipName = "Port Specification";
+        chipDesc = `Restricts port probe strictly to port(s) ${token.slice(2)}.`;
+      } else if (lowerTok.startsWith("--script=")) {
+        chipName = "NSE Script Selection";
+        chipDesc = `Runs automated Nmap Lua script: ${token.split("=")[1]}.`;
+      } else if (lowerTok.startsWith("-d") && lowerTok.includes("rnd")) {
+        chipName = "Decoy IP Cloaking";
+        chipDesc = "Generates random decoy IP addresses to conceal scanner's real IP.";
+      } else if (lowerTok.startsWith("-g")) {
+        chipName = "Source Port Override";
+        chipDesc = "Sends probes from custom source port to evade filtering rules.";
+      } else if (lowerTok === "public") {
+        chipName = "SNMP Community String";
+        chipDesc = "Standard default read-only SNMP community password.";
+      } else if (lowerTok === "ms17-010") {
+        chipName = "Exploit Keyword";
+        chipDesc = "Searches Exploit-DB for EternalBlue SMB RCE vulnerability.";
+      } else if (lowerTok.endsWith(".nse") || lowerTok.includes("smb-") || lowerTok.includes("ldap-") || lowerTok.includes("smtp-") || lowerTok === "vuln") {
+        chipName = "NSE Script";
+        chipDesc = `Nmap Scripting Engine module: ${token}.`;
+      } else if (lowerTok.endsWith(".py")) {
+        chipName = "Python Script";
+        chipDesc = `Custom security script: ${token}.`;
+      } else {
+        chipName = `Option: ${token}`;
+        chipDesc = `Configures behavior of ${rawTokens[0]}.`;
+      }
+    }
+
+    card.innerHTML = `
+      <div class="arg-chip-header">
+        <span class="arg-chip-code ${chipCodeClass}">${token}</span>
+        <span class="arg-chip-name">${chipName}</span>
+      </div>
+      <div class="arg-chip-desc">${chipDesc}</div>
+    `;
+
+    container.appendChild(card);
+  });
+
+  // Accepted Pro / Alternative Flags Box
+  if (altBox) {
+    const altFlags = [];
+    if (tool === "nmap") {
+      altFlags.push({ code: "-Pn", desc: "Skip ICMP ping / bypass firewall" });
+      altFlags.push({ code: "-T4", desc: "Aggressive speed template" });
+      altFlags.push({ code: "-p-", desc: "Scan all 65,535 ports" });
+      altFlags.push({ code: "-O", desc: "OS TCP/IP fingerprinting" });
+      altFlags.push({ code: "-A", desc: "Comprehensive aggressive scan" });
+      altFlags.push({ code: "-v / -vv", desc: "Verbose console output" });
+    } else if (tool === "ping") {
+      altFlags.push({ code: "-c 2", desc: "Transmit 2 packets" });
+      altFlags.push({ code: "-c 4", desc: "Transmit 4 packets" });
+      altFlags.push({ code: "-i 0.5", desc: "Half-second interval" });
+    } else if (tool === "traceroute" || tool === "tracert") {
+      altFlags.push({ code: "-n", desc: "Numeric IPs without DNS resolve" });
+      altFlags.push({ code: "-m 30", desc: "Max 30 hops" });
+    } else if (tool === "nslookup") {
+      altFlags.push({ code: "-type=ns", desc: "Nameserver records" });
+      altFlags.push({ code: "-type=soa", desc: "Start of authority record" });
+      altFlags.push({ code: "-type=any", desc: "All available DNS records" });
+    } else if (tool === "dig") {
+      altFlags.push({ code: "axfr", desc: "Full zone transfer replication" });
+      altFlags.push({ code: "mx", desc: "Mail exchange records" });
+      altFlags.push({ code: "ns", desc: "Nameservers list" });
+      altFlags.push({ code: "any", desc: "Query all records" });
+    } else if (tool === "nbtstat") {
+      altFlags.push({ code: "-A <IP>", desc: "Query remote NetBIOS table by IP" });
+      altFlags.push({ code: "-a <Name>", desc: "Query remote table by hostname" });
+      altFlags.push({ code: "-c", desc: "Dump NetBIOS name cache" });
+    } else if (tool === "snmpwalk") {
+      altFlags.push({ code: "-v1", desc: "SNMP version 1" });
+      altFlags.push({ code: "-v2c", desc: "SNMP version 2c (recommended)" });
+      altFlags.push({ code: "-c public", desc: "Default public community" });
+    } else if (tool === "enum4linux") {
+      altFlags.push({ code: "-a", desc: "Full automated enumeration" });
+      altFlags.push({ code: "-U", desc: "User accounts list" });
+      altFlags.push({ code: "-S", desc: "Shares list" });
+      altFlags.push({ code: "-P", desc: "Password policy settings" });
+    } else if (tool === "sgpt") {
+      altFlags.push({ code: "--shell", desc: "Execute synthesized command" });
+      altFlags.push({ code: "--chat <name>", desc: "Stateful session memory" });
+    } else if (tool === "nikto") {
+      altFlags.push({ code: "-h <host>", desc: "Target web server" });
+      altFlags.push({ code: "-ssl", desc: "Force HTTPS connection" });
+    } else if (tool === "searchsploit") {
+      altFlags.push({ code: "-w", desc: "Show Exploit-DB web URLs" });
+      altFlags.push({ code: "-p <id>", desc: "Show full path to exploit script" });
+    } else {
+      altFlags.push({ code: "-v", desc: "Verbose execution output" });
+      altFlags.push({ code: "--help", desc: "Display manual help page" });
+    }
+
+    altFlags.forEach(f => {
+      const tag = document.createElement("span");
+      tag.className = "alt-arg-tag";
+      tag.innerHTML = `<code>${f.code}</code> <span>(${f.desc})</span>`;
+      altBox.appendChild(tag);
+    });
+  }
+}
 
 // Initialize on Load
 window.addEventListener("DOMContentLoaded", async () => {
