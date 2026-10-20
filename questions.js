@@ -919,7 +919,7 @@ Node IpAddress: [10.10.1.19] Scope Id: []
       { check: (cmd) => !cmd.startsWith("net"), msg: "Use the Windows 'net' utility." },
       { check: (cmd) => !cmd.includes("use"), msg: "Use the 'use' subcommand." }
     ],
-    tutorNotes: "Teaching Point: Net use is a vital post-enumeration tool. Attackers establish null sessions via 'net use \\target\ipc$ "" /u:""' to dump SAM accounts without valid credentials.",
+    tutorNotes: "Teaching Point: Net use is a vital post-enumeration tool. Attackers establish null sessions via 'net use \\target\ipc$ \"\" /u:\"\"' to dump SAM accounts without valid credentials.",
     highlightText: "\\10.10.1.19\CEHv13",
     analysisQuestion: {
       prompt: "Based on the 'net use' output, what shared network folder is actively mapped to local drive Z:?",

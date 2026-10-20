@@ -220,7 +220,7 @@ function loadQuestion(idx) {
   }
 
   // Concept Card
-  const isSolved = currentUser ? currentUser.solved.includes(q.id) : false;
+  const isSolved = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved.includes(q.id) : false;
   if (isSolved) {
     showGuidance("success", `<strong>Challenge Solved!</strong> You've successfully executed this command.`);
     renderConceptQuestion(q, true);
@@ -307,7 +307,7 @@ function renderQuestionGrid() {
     badgesContainer.className = "module-row-badges";
 
     modQuestions.forEach(({ q, idx }) => {
-      const isSolved = currentUser ? currentUser.solved.includes(q.id) : false;
+      const isSolved = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved.includes(q.id) : false;
       const badge = document.createElement("div");
       badge.className = `q-badge ${idx === currentIndex ? "current" : ""} ${isSolved ? "completed" : ""}`;
       badge.innerText = q.id;
@@ -692,20 +692,31 @@ function showHint() {
   const q = CEH_QUESTIONS[currentIndex];
   if (!q) return;
 
-  if (currentUser && currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
-    currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 15;
-    saveCurrentUser();
+  if (currentUser && currentUser.role === "student") {
+    if (!currentUser.penalties) currentUser.penalties = {};
+    const solvedList = Array.isArray(currentUser.solved) ? currentUser.solved : [];
+    if (!solvedList.includes(q.id)) {
+      currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 15;
+      saveCurrentUser();
+    }
   }
   showGuidance("hint", `<strong>💡 Instructor Hint:</strong> ${q.hint}`);
+  if (elGuidanceBox) {
+    elGuidanceBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 function showSolution() {
   const q = CEH_QUESTIONS[currentIndex];
   if (!q) return;
 
-  if (currentUser && currentUser.role === "student" && !currentUser.solved.includes(q.id)) {
-    currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 50;
-    saveCurrentUser();
+  if (currentUser && currentUser.role === "student") {
+    if (!currentUser.penalties) currentUser.penalties = {};
+    const solvedList = Array.isArray(currentUser.solved) ? currentUser.solved : [];
+    if (!solvedList.includes(q.id)) {
+      currentUser.penalties[q.id] = (currentUser.penalties[q.id] || 0) + 50;
+      saveCurrentUser();
+    }
   }
   // Reveal Solution optionally activates the live keystroke tracker for assistance!
   setTrackerVisible(true);
@@ -718,6 +729,9 @@ function showSolution() {
      </div><br>
      <span style="font-size:0.78rem; opacity:0.85;">⚠️ Copying is disabled. Type the command into the terminal using the keystroke guide activated below.</span>`
   );
+  if (elGuidanceBox) {
+    elGuidanceBox.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 }
 
 // Clear Terminal
