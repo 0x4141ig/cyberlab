@@ -31,6 +31,14 @@ Runs **100% in the browser** using pure HTML5, CSS3, and modern Vanilla JavaScri
 
 ---
 
+## 🧪 Tool Labs (multi-step Education tasks)
+
+Education tasks are organised **by tool**. A *lab* teaches one tool through a few short steps, easiest argument first (for example `ping`: `-c`, `-s`, `-i`, then the Windows `-n`). Every helper works on the step you are on: the argument breakdown card, the live typing guide, the Intellisense HUD, hints and the solution. Progress per step is saved with the student's account, and the lab is scored once the last step is done.
+
+Labs live in `lab_questions.js`; the engine is `labs.js`. A lab with the same `id` as an old task replaces it, `replaces: [ids]` folds old tasks into it, `placeAfter: id` inserts a new lab, and `HIDDEN_TASK_IDS` hides tasks without deleting them. Each step takes a `label`, `task`, `solution`, `accepted`, `hint`, `diagnostics`, `output` (a string, or a function of the command), and optional `prompt` / `target` overrides (for example a Windows prompt).
+
+Every lab should get a CTF twin in `ctf_questions.js` (`pairedWith: <lab id>`).
+
 ## 🚩 CTF Challenges (Practice What You Learned)
 
 Beyond the 38 guided Education labs, the platform has **walkthrough CTF challenges** (`ctf_questions.js`). A CTF task never shows the command: students read a mission, pick the tool, find a `CEH{...}` flag in the output and submit it. Hints are a 3-step ladder with small point costs, a write-up appears after solving, and a captured flag is shown with a **Copy** button.

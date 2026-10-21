@@ -180,11 +180,15 @@ function renderTargetBadge(q) {
   const isWinServer = q.target.includes("10.10.1.22") || q.target.toLowerCase().includes("windows");
   const isParrot = q.target.includes("10.10.1.11") || q.target.includes("Parrot");
   const isLinux = q.target.includes("10.10.1.19");
+  const isExternalIp = /^\d{1,3}\./.test(q.target) && !q.target.startsWith("10.10.1.");
+  const note = (q.target.match(/\(([^)]+)\)/) || [])[1];
 
   let envLabel = "Windows Server 2022 Datacenter (Domain Host)";
   if (isDomain) envLabel = "External Target / Public DNS Domain";
+  else if (isExternalIp) envLabel = "External Host (Public IP Space)";
   else if (isParrot) envLabel = "Parrot Security OS (Internal Gateway)";
   else if (isLinux) envLabel = "Linux Server (RPC & Mail Services)";
+  else if (!isWinServer && note) envLabel = note;
 
   const cleanIp = q.target.split(" ")[0].replace(/[\(\)]/g, "");
 
@@ -216,7 +220,7 @@ function renderTargetBadge(q) {
 function loadQuestion(idx) {
   if (idx < 0 || idx >= ALL_TASKS.length) return;
 
-  // Keep users inside the tasks their path exposes (CTF tasks stay hidden until CTF mode is on)
+  // Keep users inside the tasks their layout exposes
   const layout = buildTaskLayout(currentUser);
   if (layout.path.length && !layout.path.includes(idx)) idx = layout.path[0];
 
@@ -226,6 +230,7 @@ function loadQuestion(idx) {
   const locked = isTaskLocked(q, currentUser);
   ctfLockedShown = locked;
   setCtfPaneState(isCtf, locked);
+  syncLabViewStep(q);
 
   // Keep the sidebar tab on the list the task belongs to
   sidebarTab = isCtf ? "ctf" : "edu";
@@ -236,17 +241,11 @@ function loadQuestion(idx) {
     : `Task ${layout.edu.path.indexOf(idx) + 1} of ${layout.edu.path.length}`;
   elPointsPill.innerText = `+${q.points || 100} PTS`;
 
-  // Terminal Prompt
-  elTerminalPrompt.innerText = q.prompt;
-  if (q.prompt.startsWith("msf")) {
-    elTerminalPrompt.classList.add("msf");
-  } else {
-    elTerminalPrompt.classList.remove("msf");
-  }
-  elTerminalInput.value = "";
-
   if (locked) {
-    // Locked CTF challenge: reveal nothing about the task until the instructor releases it
+    // Locked CTF challenge: reveal nothing about the task until the instructor opens it
+    elTerminalPrompt.innerText = q.prompt;
+    elTerminalPrompt.classList.toggle("msf", q.prompt.startsWith("msf"));
+    elTerminalInput.value = "";
     elModuleTag.innerText = "🚩 CTF CHALLENGE";
     elTaskTitle.innerText = `🔒 CTF Challenge ${ctfNumber(q)} — Locked`;
     const lockedHud = document.getElementById("cliIntellisenseHud");
@@ -254,6 +253,7 @@ function loadQuestion(idx) {
     elTutorBox.style.display = "none";
     hideGuidance();
     elConceptCard.style.display = "none";
+    renderLabStepper(q);
     setTrackerVisible(false);
     updateNavButtons();
     renderQuestionGrid();
@@ -262,17 +262,14 @@ function loadQuestion(idx) {
 
   // Update Left Manual Pane
   elModuleTag.innerText = q.moduleTitle;
-  elTaskTitle.innerText = isCtf ? `🚩 CTF ${ctfNumber(q)}: ${q.title}` : `Task ${q.id}: ${q.title}`;
-  renderTargetBadge(q);
+  elTaskTitle.innerText = isCtf ? `🚩 CTF ${ctfNumber(q)}: ${q.title}` : `Task ${eduNumber(q)}: ${q.title}`;
 
-  // Update Command Syntax & Argument Breakdown (Education tasks only: CTF never shows the command)
-  if (!isCtf) renderCommandBreakdown(q);
-  const hud = document.getElementById("cliIntellisenseHud");
-  if (hud) hud.style.display = "none";
-  updateCliIntellisense("");
+  // Target card, command breakdown, step instruction, terminal prompt and typing guide
+  // (for a lab these all follow the step being worked on)
+  applyTaskView(q);
+  renderLabStepper(q);
 
   elScenarioText.innerText = q.scenario;
-  elTaskText.innerText = q.task;
   elExamTipText.innerText = q.cehExamTip;
 
   // Sync module filter chip if navigating across modules while filtered
@@ -296,6 +293,7 @@ function loadQuestion(idx) {
   if (currentUser && currentUser.role === "admin") {
     elTutorBox.style.display = "block";
     let notes = q.tutorNotes || "Demonstrate command syntax and review output details with students.";
+    if (isLab(q)) notes += `\nLab steps: ${q.steps.map((s, i) => `${i + 1}) ${s.solution}`).join("   ")}`;
     if (isCtf) notes += `\n🔑 Solution: ${q.solution}\n🚩 Flag: ${getTaskFlag(q)}`;
     elTutorNotesText.innerText = notes;
   } else {
@@ -317,7 +315,9 @@ function loadQuestion(idx) {
     updateCtfHintButton(q);
     // Concept Card
     if (isSolved) {
-      showGuidance("success", `<strong>Challenge Solved!</strong> You've successfully executed this command.`);
+      showGuidance("success", isLab(q)
+        ? `<strong>Lab Solved!</strong> You've completed all ${q.steps.length} steps. Click any step above to review it.`
+        : `<strong>Challenge Solved!</strong> You've successfully executed this command.`);
       renderConceptQuestion(q, true);
     } else {
       hideGuidance();
@@ -329,11 +329,29 @@ function loadQuestion(idx) {
 
   elTerminalInput.focus();
 
+  renderQuestionGrid();
+}
+
+// Show the task, or the lab step being worked on: target card, command breakdown,
+// instruction, terminal prompt, and reset the typing guide / HUD
+function applyTaskView(q) {
+  const v = isLab(q) ? getTaskView(q, labViewStep) : q;
+  renderTargetBadge(v);
+  if (!isCtfTask(q)) renderCommandBreakdown(v);
+
+  const hud = document.getElementById("cliIntellisenseHud");
+  if (hud) hud.style.display = "none";
+  updateCliIntellisense("");
+
+  elTaskText.innerText = v.task;
+
+  elTerminalPrompt.innerText = v.prompt;
+  elTerminalPrompt.classList.toggle("msf", v.prompt.startsWith("msf"));
+  elTerminalInput.value = "";
+
   // Reset Live Keystroke Tracker (Hidden by default for pro users)
   setTrackerVisible(false);
   updateKeystrokeTracker("");
-
-  renderQuestionGrid();
 }
 
 // Previous / Next move within the current list (Education or CTF), skipping locked CTF tasks
@@ -359,7 +377,7 @@ function buildSidebarCard(idx, solvedList) {
 
   const badge = document.createElement("div");
   badge.className = "sidebar-task-badge";
-  badge.innerHTML = isSolved ? "✓" : (locked ? "🔒" : (isCtf ? "🚩" : q.id));
+  badge.innerHTML = isSolved ? "✓" : (locked ? "🔒" : (isCtf ? "🚩" : eduNumber(q)));
 
   const title = locked ? `Locked CTF Challenge ${ctfNumber(q)}` : q.title;
   let meta;
@@ -369,8 +387,13 @@ function buildSidebarCard(idx, solvedList) {
     const related = ALL_TASKS.find((t) => t.id === q.pairedWith && !isCtfTask(t));
     const status = currentUser && currentUser.role === "admin"
       ? (isCtfLive(q) ? "OPEN" : "CLOSED")
-      : (related ? `Related: Task ${related.id}` : "CTF");
+      : (related ? `Related: Task ${eduNumber(related)}` : "CTF");
     meta = `<span>+${q.points || 150} pts</span><span>•</span><span style="opacity:0.8;">${status}</span>`;
+  } else if (isLab(q)) {
+    meta = `
+      <span>+${q.points || 100} pts</span>
+      <span>•</span>
+      <span style="opacity:0.8;">Lab · ${labStepsDone(q)}/${q.steps.length} steps</span>`;
   } else {
     meta = `
       <span>+${q.points || 100} pts</span>
@@ -436,7 +459,9 @@ function renderQuestionGrid() {
   const matchesSearch = (q, locked) => {
     if (!searchTerm) return true;
     if (locked) return "locked ctf challenge".includes(searchTerm);
-    return q.title.toLowerCase().includes(searchTerm) || q.task.toLowerCase().includes(searchTerm) || q.id.toString() === searchTerm;
+    const text = `${q.title} ${q.task || ""} ${(q.steps || []).map((s) => s.label + " " + s.task).join(" ")}`.toLowerCase();
+    const number = isCtfTask(q) ? ctfNumber(q) : eduNumber(q);
+    return text.includes(searchTerm) || number.toString() === searchTerm;
   };
 
   tab.groups.forEach(group => {
@@ -608,7 +633,8 @@ function evaluateCommand(userCmd) {
     return;
   }
 
-  const q = ALL_TASKS[currentIndex];
+  const base = ALL_TASKS[currentIndex];
+  const q = getActiveTask();   // for a lab: the lab merged with the step being worked on
   const trimmed = userCmd.trim();
 
   if (!trimmed) return;
@@ -647,7 +673,12 @@ function evaluateCommand(userCmd) {
       return;
     }
 
-    appendHighlightedOutput(q.output, q.highlightText);
+    appendHighlightedOutput(typeof q.output === "function" ? q.output(trimmed) : q.output, q.highlightText);
+
+    if (isLab(base)) {
+      handleLabStepSuccess(base);
+      return;
+    }
 
     if (currentUser) {
       const alreadySolved = currentUser.solved.includes(q.id);
@@ -719,7 +750,7 @@ function evaluateCommand(userCmd) {
 function updateKeystrokeTracker(typedValue) {
   if (!elCliTracker || !elTrackerDisplay) return;
 
-  const q = ALL_TASKS[currentIndex];
+  const q = getActiveTask();
   if (isCtfTask(q)) return; // CTF tasks never reveal the command through the typing guide
   const target = q.solution;
   const typed = typedValue;
@@ -918,7 +949,7 @@ function prevQuestion() {
 
 // Hint & Solution (Strictly NO Copy/Paste - forces typing)
 function showHint() {
-  const q = ALL_TASKS[currentIndex];
+  const q = getActiveTask();
   if (!q) return;
   if (isCtfTask(q)) {
     showCtfHint(q);
@@ -940,7 +971,7 @@ function showHint() {
 }
 
 function showSolution() {
-  const q = ALL_TASKS[currentIndex];
+  const q = getActiveTask();
   if (!q || isCtfTask(q)) return;
 
   if (currentUser && currentUser.role === "student") {
@@ -2126,6 +2157,7 @@ function handleSignOut() {
   currentUser = null;
   sessionStorage.removeItem("ceh_current_user");
   localStorage.removeItem("ceh_active_user");
+  clearTerminal(); // do not leave the previous user's command output on screen
 
   const loginPass = document.getElementById("loginPassword");
   const signupPass = document.getElementById("signupPassword");
@@ -2430,7 +2462,7 @@ function renderAdminStudentTable(students) {
       <td>
         <div class="admin-task-pill">
           <span>📍</span>
-          <strong>Q${taskId}:</strong>
+          <strong>${(() => { const ct = ALL_TASKS.find((t) => t.id === Number(taskId)); return ct ? (isCtfTask(ct) ? "CTF " + ctfNumber(ct) : "Q" + eduNumber(ct)) : "Q" + taskId; })()}:</strong>
           <span style="max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(taskTitle)}</span>
         </div>
         <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 3px; padding-left: 2px;">
@@ -2469,11 +2501,11 @@ function renderAdminMatrix(students) {
 
   // Columns: Education tasks, then CTF tasks
   const matrixTasks = ALL_TASKS;
-  const colLabel = (t) => (isCtfTask(t) ? `🚩${ctfNumber(t)}` : `Q${t.id}`);
+  const colLabel = (t) => (isCtfTask(t) ? `🚩${ctfNumber(t)}` : `Q${eduNumber(t)}`);
 
   let hHtml = `<th style="position: sticky; left: 0; background: var(--bg-card); z-index: 2; min-width: 120px;">Student</th>`;
   matrixTasks.forEach((t) => {
-    hHtml += `<th style="text-align: center; width: 28px; padding: 4px 2px;" title="${isCtfTask(t) ? "CTF" : "Task"} ${isCtfTask(t) ? ctfNumber(t) : t.id}: ${escapeHtml(t.title || '')}">${colLabel(t)}</th>`;
+    hHtml += `<th style="text-align: center; width: 28px; padding: 4px 2px;" title="${isCtfTask(t) ? "CTF" : "Task"} ${isCtfTask(t) ? ctfNumber(t) : eduNumber(t)}: ${escapeHtml(t.title || '')}">${colLabel(t)}</th>`;
   });
   hHtml += `<th style="text-align: center; width: 60px;">Total</th>`;
   headerTr.innerHTML = hHtml;
@@ -3007,6 +3039,72 @@ const CLI_KNOWLEDGE_BASE = {
   }
 };
 
+// Tool-specific flags (exact case) so the same flag can mean different things in different tools
+// (ping -s is packet size, curl -s is silent). `val: true` marks flags that take a value.
+CLI_KNOWLEDGE_BASE.toolFlags = {
+  "ping": {
+    "-c": { name: "Packet Count", type: "Argument", desc: "Sends exactly N echo requests, then stops (Linux).", val: true, valDesc: "Number of echo requests to send." },
+    "-s": { name: "Packet Size", type: "Argument", desc: "Sets the ICMP payload size in bytes (default 56). Large packets test MTU and fragmentation handling.", val: true, valDesc: "Payload size in bytes." },
+    "-i": { name: "Packet Interval", type: "Timing", desc: "Seconds to wait between packets (default 1 second).", val: true, valDesc: "Interval in seconds, for example 0.5." },
+    "-n": { name: "Packet Count (Windows)", type: "Argument", desc: "On Windows, -n sets how many echo requests to send. (On Linux, -n means numeric output only.)", val: true, valDesc: "Number of echo requests (Windows syntax)." },
+    "-t": { name: "Ping Until Stopped (Windows)", type: "Argument", desc: "Windows only: keeps pinging until you press Ctrl+C." }
+  },
+  "traceroute": {
+    "-n": { name: "Numeric Addresses Only", type: "Format", desc: "Skips reverse DNS lookups and prints raw IP addresses. Faster, and quieter on the DNS server." },
+    "-m": { name: "Maximum Hops", type: "Routing", desc: "Stops the trace after N hops instead of the default 30.", val: true, valDesc: "Maximum number of hops (TTL)." },
+    "-I": { name: "ICMP Echo Probes", type: "Method", desc: "Uses ICMP echo requests instead of the default UDP probes. Useful when a firewall blocks UDP." },
+    "-T": { name: "TCP SYN Probes", type: "Method", desc: "Uses TCP SYN probes, which often pass firewalls that allow web traffic." },
+    "-w": { name: "Probe Timeout", type: "Timing", desc: "Seconds to wait for each reply.", val: true, valDesc: "Timeout in seconds." }
+  },
+  "tracert": {
+    "-d": { name: "No Name Resolution", type: "Format", desc: "Windows: do not resolve addresses to hostnames." },
+    "-h": { name: "Maximum Hops", type: "Routing", desc: "Windows: maximum number of hops to search for the target.", val: true, valDesc: "Maximum number of hops." }
+  },
+  "nslookup": {
+    "-type=a": { name: "Address Record Query", type: "DNS Query", desc: "Requests the IPv4 address (A record) of the domain. This is the default." },
+    "-type=ns": { name: "Nameserver Record Query", type: "DNS Query", desc: "Requests the authoritative name servers (NS records) of the domain." },
+    "-type=mx": { name: "Mail Exchanger Query", type: "DNS Query", desc: "Requests the mail servers (MX records) that accept email for the domain." },
+    "-type=soa": { name: "Start of Authority Query", type: "DNS Query", desc: "Requests the SOA record: primary server, administrator email and zone serial." },
+    "-type=txt": { name: "Text Record Query", type: "DNS Query", desc: "Requests TXT records (SPF policies, verification tokens, notes)." },
+    "-type=any": { name: "All Records Query", type: "DNS Query", desc: "Requests all available record types." },
+    "-query=ns": { name: "Nameserver Record Query", type: "DNS Query", desc: "Long form of -type=ns." },
+    "-q=ns": { name: "Nameserver Record Query", type: "DNS Query", desc: "Short form of -type=ns." }
+  },
+  "dig": {
+    "mx": { name: "Mail Exchanger Query", type: "DNS Query", desc: "Queries the mail servers (MX) for the domain. The lowest preference number is tried first." },
+    "ns": { name: "Nameserver Query", type: "DNS Query", desc: "Queries the authoritative name servers (NS) for the domain." },
+    "txt": { name: "Text Record Query", type: "DNS Query", desc: "Queries TXT records: SPF policies, domain verification tokens and sometimes careless notes." },
+    "soa": { name: "Start of Authority Query", type: "DNS Query", desc: "Queries the SOA record: primary server, admin email and zone serial." },
+    "any": { name: "All Records Query", type: "DNS Query", desc: "Requests all available record types." },
+    "axfr": { name: "Zone Transfer Request", type: "DNS Query", desc: "Requests a complete copy of the DNS zone from a server. Only works if the server allows it." },
+    "+short": { name: "Brief Output", type: "Query Option", desc: "Prints only the answer, with no headers or statistics. Handy for scripts." },
+    "-x": { name: "Reverse Lookup", type: "Query Option", desc: "Looks up the hostname (PTR record) that belongs to an IP address.", val: true, valDesc: "The IP address to look up." }
+  },
+  "curl": {
+    "-I": { name: "Headers Only (HEAD)", type: "Inspection", desc: "Sends a HEAD request and prints only the response headers. Ideal for banner grabbing." },
+    "--head": { name: "Headers Only (HEAD)", type: "Inspection", desc: "Long form of -I." },
+    "-i": { name: "Include Headers", type: "Inspection", desc: "Makes a normal request and prints the response headers before the page body." },
+    "--include": { name: "Include Headers", type: "Inspection", desc: "Long form of -i." },
+    "-L": { name: "Follow Redirects", type: "Behaviour", desc: "Follows HTTP 3xx redirects until it reaches the final page." },
+    "--location": { name: "Follow Redirects", type: "Behaviour", desc: "Long form of -L." },
+    "-A": { name: "User-Agent", type: "Header", desc: "Sets the User-Agent string, which servers use to guess the browser or tool.", val: true, valDesc: "The User-Agent string (put it in quotes)." },
+    "--user-agent": { name: "User-Agent", type: "Header", desc: "Long form of -A.", val: true, valDesc: "The User-Agent string." },
+    "-s": { name: "Silent Mode", type: "Output", desc: "Hides the progress meter and error messages." },
+    "-v": { name: "Verbose", type: "Output", desc: "Prints the full request and response exchange." },
+    "-H": { name: "Custom Header", type: "Header", desc: "Adds a custom request header.", val: true, valDesc: "Header in 'Name: value' form." }
+  },
+  "whois": {
+    "-h": { name: "WHOIS Server", type: "Argument", desc: "Chooses which WHOIS server to ask instead of the default one.", val: true, valDesc: "Hostname of the WHOIS server." }
+  }
+};
+
+// Look up help for a flag: tool-specific first (exact case), then the global dictionary
+function lookupFlagInfo(tool, token) {
+  const tf = CLI_KNOWLEDGE_BASE.toolFlags[tool];
+  if (tf) return tf[token] || tf[token.toLowerCase()] || null;
+  return CLI_KNOWLEDGE_BASE.flags[token.toLowerCase()] || null;
+}
+
 // Real-Time CLI Parameter Intellisense HUD Updater
 function updateCliIntellisense(rawInput) {
   const hud = document.getElementById("cliIntellisenseHud");
@@ -3104,8 +3202,23 @@ function updateCliIntellisense(rawInput) {
     return;
   }
 
-  // 6. Specific Known Flag matching
-  const flagInfo = CLI_KNOWLEDGE_BASE.flags[lowerToken];
+  // 5b. Value for a flag that takes one (for example the 1000 in "-s 1000")
+  if (tokens.length >= 3 && !endsWithSpace) {
+    const prevInfo = lookupFlagInfo(toolName, tokens[tokens.length - 2]);
+    if (prevInfo && prevInfo.val && !currentToken.startsWith("-")) {
+      hudBadge.className = "hud-badge option";
+      hudBadge.innerText = "ARGUMENT VALUE";
+      hudTokenName.innerText = currentToken;
+      hudTypeLabel.innerText = `Value for ${tokens[tokens.length - 2]}`;
+      hudBodyText.innerText = prevInfo.valDesc || `Value passed to ${tokens[tokens.length - 2]}.`;
+      hudFooterTipText.innerHTML = `<strong>${prevInfo.name}</strong>. Then continue with the next option or the target.`;
+      hud.style.display = "flex";
+      return;
+    }
+  }
+
+  // 6. Specific Known Flag matching (tool-specific first)
+  const flagInfo = lookupFlagInfo(toolName, currentToken);
   if (flagInfo) {
     hudBadge.className = "hud-badge arg";
     hudBadge.innerText = "CLI ARGUMENT";
@@ -3177,6 +3290,9 @@ function renderCommandBreakdown(q) {
   const rawTokens = solution.match(regex) || [];
   const tool = rawTokens[0] ? rawTokens[0].toLowerCase() : "";
 
+  let prevFlagInfo = null;   // previous token's flag info, to explain its value (for example "1000" after -s)
+  let positionalCount = 0;
+
   rawTokens.forEach((token, idx) => {
     const card = document.createElement("div");
     card.className = "arg-chip-card";
@@ -3188,12 +3304,26 @@ function renderCommandBreakdown(q) {
 
     const lowerTok = token.toLowerCase();
 
+    const valueOfPrevFlag = prevFlagInfo && prevFlagInfo.val && !token.startsWith("-");
+    const isPositional = idx > 0 && !token.startsWith("-") && !token.startsWith("@") && !token.startsWith("+") && !valueOfPrevFlag;
+    if (isPositional) positionalCount++;
+
     if (idx === 0) {
       chipType = "tool";
       chipCodeClass = "tool";
       const tInfo = CLI_KNOWLEDGE_BASE.tools[lowerTok];
       chipName = tInfo ? tInfo.name : "Primary Binary";
       chipDesc = tInfo ? tInfo.desc : "Executable command or tool.";
+    } else if (valueOfPrevFlag) {
+      chipType = "option";
+      chipCodeClass = "";
+      chipName = `Value: ${token}`;
+      chipDesc = prevFlagInfo.valDesc || "Value passed to the previous option.";
+    } else if (tool === "nslookup" && isPositional && positionalCount === 2) {
+      chipType = "target";
+      chipCodeClass = "target";
+      chipName = "DNS Server to Query";
+      chipDesc = `nslookup asks this server (${token}) instead of the default resolver.`;
     } else if (token.startsWith('"') || token.startsWith("'")) {
       chipType = "option";
       chipCodeClass = "";
@@ -3210,8 +3340,8 @@ function renderCommandBreakdown(q) {
       chipName = "DNS Server Target";
       chipDesc = `Nameserver queried directly for DNS records (${token}).`;
     } else {
-      // Flag or argument
-      const fInfo = CLI_KNOWLEDGE_BASE.flags[lowerTok];
+      // Flag or argument (tool-specific help first)
+      const fInfo = lookupFlagInfo(tool, token);
       if (fInfo) {
         chipName = fInfo.name;
         chipDesc = fInfo.desc;
@@ -3253,6 +3383,8 @@ function renderCommandBreakdown(q) {
       <div class="arg-chip-desc">${chipDesc}</div>
     `;
 
+    prevFlagInfo = (idx > 0 && token.startsWith("-") || token.startsWith("+")) ? lookupFlagInfo(tool, token) : null;
+
     container.appendChild(card);
   });
 
@@ -3267,21 +3399,33 @@ function renderCommandBreakdown(q) {
       altFlags.push({ code: "-A", desc: "Comprehensive aggressive scan" });
       altFlags.push({ code: "-v / -vv", desc: "Verbose console output" });
     } else if (tool === "ping") {
-      altFlags.push({ code: "-c 2", desc: "Transmit 2 packets" });
-      altFlags.push({ code: "-c 4", desc: "Transmit 4 packets" });
-      altFlags.push({ code: "-i 0.5", desc: "Half-second interval" });
+      altFlags.push({ code: "-c <n>", desc: "Packet count (Linux)" });
+      altFlags.push({ code: "-n <n>", desc: "Packet count (Windows)" });
+      altFlags.push({ code: "-s <bytes>", desc: "Payload size" });
+      altFlags.push({ code: "-i <sec>", desc: "Interval between packets" });
     } else if (tool === "traceroute" || tool === "tracert") {
       altFlags.push({ code: "-n", desc: "Numeric IPs without DNS resolve" });
-      altFlags.push({ code: "-m 30", desc: "Max 30 hops" });
+      altFlags.push({ code: "-m <hops>", desc: "Maximum hops" });
+      altFlags.push({ code: "-I", desc: "ICMP probes instead of UDP" });
+    } else if (tool === "curl") {
+      altFlags.push({ code: "-I / --head", desc: "Headers only (HEAD)" });
+      altFlags.push({ code: "-i / --include", desc: "Headers plus body" });
+      altFlags.push({ code: "-L", desc: "Follow redirects" });
+      altFlags.push({ code: "-A <agent>", desc: "Custom User-Agent" });
+    } else if (tool === "whois") {
+      altFlags.push({ code: "-h <server>", desc: "Ask a specific WHOIS server" });
     } else if (tool === "nslookup") {
       altFlags.push({ code: "-type=ns", desc: "Nameserver records" });
       altFlags.push({ code: "-type=soa", desc: "Start of authority record" });
       altFlags.push({ code: "-type=any", desc: "All available DNS records" });
+      altFlags.push({ code: "-type=mx", desc: "Mail exchanger records" });
+      altFlags.push({ code: "<domain> <server>", desc: "Ask a specific DNS server" });
     } else if (tool === "dig") {
       altFlags.push({ code: "axfr", desc: "Full zone transfer replication" });
-      altFlags.push({ code: "mx", desc: "Mail exchange records" });
-      altFlags.push({ code: "ns", desc: "Nameservers list" });
-      altFlags.push({ code: "any", desc: "Query all records" });
+      altFlags.push({ code: "mx / ns / txt", desc: "Record types" });
+      altFlags.push({ code: "+short", desc: "Brief output" });
+      altFlags.push({ code: "-x <ip>", desc: "Reverse lookup" });
+      altFlags.push({ code: "@<server>", desc: "Ask a specific DNS server" });
     } else if (tool === "nbtstat") {
       altFlags.push({ code: "-A <IP>", desc: "Query remote NetBIOS table by IP" });
       altFlags.push({ code: "-a <Name>", desc: "Query remote table by hostname" });

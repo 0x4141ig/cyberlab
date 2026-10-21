@@ -43,7 +43,7 @@ const CTF_QUESTIONS = [
   {
     id: 101,
     type: "ctf",
-    pairedWith: 4,   // practises Education task 4
+    pairedWith: 3,
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "The Note in the DNS",
@@ -107,7 +107,7 @@ Authoritative answers can be found from:`
   {
     id: 102,
     type: "ctf",
-    pairedWith: 5,   // practises Education task 5
+    pairedWith: 4,
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Everything the DNS Server Knows",
@@ -154,7 +154,7 @@ ctf-corp.local.            3600  IN  SOA  ns1.ctf-corp.local. admin.ctf-corp.loc
   {
     id: 103,
     type: "ctf",
-    pairedWith: 6,   // practises Education task 6
+    pairedWith: 6,
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Chatty Web Server",
@@ -195,7 +195,7 @@ Set-Cookie: PHPSESSID=7f3k2n9d8q1c; path=/; HttpOnly`,
   {
     id: 104,
     type: "ctf",
-    pairedWith: 37,   // practises Education task 37
+    pairedWith: 37,
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Please Do Not Crawl",
@@ -233,7 +233,7 @@ Sitemap: http://10.10.1.22/sitemap.xml`,
   {
     id: 105,
     type: "ctf",
-    pairedWith: 6,   // practises Education task 6
+    pairedWith: 6,
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Read the Fine Print",
@@ -292,7 +292,7 @@ Sitemap: http://10.10.1.22/sitemap.xml`,
   {
     id: 106,
     type: "ctf",
-    pairedWith: 10,   // practises Education task 10
+    pairedWith: 10,
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "Odd Service in the Version Column",
@@ -339,7 +339,7 @@ Nmap done: 1 IP address (1 host up) scanned in 14.52 seconds`,
   {
     id: 107,
     type: "ctf",
-    pairedWith: 12,   // practises Education task 12
+    pairedWith: 12,
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "What Is the Page Called?",
@@ -389,7 +389,7 @@ Nmap done: 1 IP address (1 host up) scanned in 6.31 seconds`,
   {
     id: 108,
     type: "ctf",
-    pairedWith: 30,   // practises Education task 30
+    pairedWith: 30,
     module: 4,
     moduleTitle: "CTF · Enumeration",
     title: "Mail Server Greeting",
@@ -431,7 +431,7 @@ Nmap done: 1 IP address (1 host up) scanned in 1.12 seconds`,
   {
     id: 109,
     type: "ctf",
-    pairedWith: 32,   // practises Education task 32
+    pairedWith: 32,
     module: 4,
     moduleTitle: "CTF · Enumeration",
     title: "The Share Nobody Remembered",
@@ -492,7 +492,7 @@ Nmap done: 1 IP address (1 host up) scanned in 3.84 seconds`,
   {
     id: 110,
     type: "ctf",
-    pairedWith: 20,   // practises Education task 20
+    pairedWith: 20,
     module: 4,
     moduleTitle: "CTF · Enumeration",
     title: "The Community Is Public",
@@ -529,5 +529,129 @@ SNMPv2-MIB::sysServices.0 = INTEGER: 76
 IF-MIB::ifNumber.0 = INTEGER: 2`,
     flagEnc: "ICAgVhMBBEEfUmwACgVAFhoPWQ9uQBcXAUMEKw9eKVBsBAwOWR4=",
     writeup: "<code>snmpwalk -v2c -c public 10.10.1.22</code> authenticated with the default community string and dumped system information. The free-text <code>sysLocation</code> field held the flag. Default community strings let anyone enumerate hosts, users and network details."
+  },
+
+  // ---------------------------------------------------------------- LAB TWINS (Module 1 and 2 pilot)
+  {
+    id: 111,
+    type: "ctf",
+    pairedWith: 1,
+    module: 1,
+    moduleTitle: "CTF · Introduction to Ethical Hacking",
+    title: "Whose Machine Is This?",
+    difficulty: "Beginner",
+    points: 150,
+    target: "10.10.1.30 (Linux Server)",
+    prompt: "root@parrot:~#",
+    scenario: "A new host has appeared on the lab network at 10.10.1.30 and nobody knows what it runs. The operating system leaves a fingerprint in every reply it sends.",
+    task: "Send exactly 3 echo requests to 10.10.1.30 and read the TTL in the replies. The flag is CEH{ttl_<value>}, where <value> is the TTL number you observe.",
+    solution: "ping -c 3 10.10.1.30",
+    accepted: [
+      (c) => /^ping\b/.test(_n(c)) && _has(c, /\s-c\s*3\s/) && _hasTarget(c, "10.10.1.30")
+    ],
+    hints: [
+      "Hint 1: You only need the basic connectivity tool, with its option for the number of packets.",
+      "Hint 2: Use ping with the packet-count option set to 3, aimed at 10.10.1.30. Then look for 'ttl=' in each reply.",
+      "Hint 3: ping -c 3 10.10.1.30"
+    ],
+    diagnostics: [
+      { check: (c) => !/^ping\b/i.test(c), msg: "Use the basic connectivity tool, ping." },
+      { check: (c) => !/10\.10\.1\.30/.test(c), msg: "The mystery host is 10.10.1.30." },
+      { check: (c) => !/-c\s*3/.test(c), msg: "The mission asks for exactly 3 packets. Which option sets the count?" }
+    ],
+    tutorNotes: "Teaching point: TTL fingerprinting. 64 suggests Linux/Unix, 128 Windows, 255 many network devices. Derived flag: the flag is not in the output, students build it from the TTL value.",
+    cehExamTip: "Exam Alert: Initial TTL values: Linux/Unix 64, Windows 128, Cisco/network devices 255. The TTL you see is the initial value minus the hops travelled.",
+    output: `PING 10.10.1.30 (10.10.1.30) 56(84) bytes of data.
+64 bytes from 10.10.1.30: icmp_seq=1 ttl=64 time=0.318 ms
+64 bytes from 10.10.1.30: icmp_seq=2 ttl=64 time=0.287 ms
+64 bytes from 10.10.1.30: icmp_seq=3 ttl=64 time=0.301 ms
+
+--- 10.10.1.30 ping statistics ---
+3 packets transmitted, 3 received, 0% packet loss, time 2044ms
+rtt min/avg/max/mdev = 0.287/0.302/0.318/0.013 ms`,
+    flagEnc: "ICAgVhcACnJABU4=",
+    writeup: "<code>ping -c 3 10.10.1.30</code> sent three echo requests. Every reply showed <code>ttl=64</code>, the default for Linux and Unix kernels, so the flag was built from that value: <code>CEH{ttl_64}</code>. A Windows host would have shown 128."
+  },
+  {
+    id: 112,
+    type: "ctf",
+    pairedWith: 2,
+    module: 1,
+    moduleTitle: "CTF · Introduction to Ethical Hacking",
+    title: "How Deep Is the DMZ?",
+    difficulty: "Beginner",
+    points: 150,
+    target: "10.10.1.40 (DMZ Server)",
+    prompt: "root@parrot:~#",
+    scenario: "A DMZ server at 10.10.1.40 sits behind several network devices. You want to know how many hops away it is, without sending a DNS lookup for every router on the way.",
+    task: "Trace the route to 10.10.1.40 showing numeric addresses only, then count the hops it takes to reach the server. The flag is CEH{hops_<number>}.",
+    solution: "traceroute -n 10.10.1.40",
+    accepted: [
+      (c) => /^traceroute\b/.test(_n(c)) && _has(c, /\s-n\s/) && _hasTarget(c, "10.10.1.40")
+    ],
+    hints: [
+      "Hint 1: The tool that maps the routers between you and a target is also the one that has an option to skip name lookups.",
+      "Hint 2: Run traceroute against 10.10.1.40 with the option for numeric output only (-n). The last numbered line is the server.",
+      "Hint 3: traceroute -n 10.10.1.40"
+    ],
+    diagnostics: [
+      { check: (c) => !/^traceroute\b/i.test(c), msg: "Use the route-mapping tool, traceroute." },
+      { check: (c) => !/10\.10\.1\.40/.test(c), msg: "The DMZ server is 10.10.1.40." },
+      { check: (c) => !/-n\b/.test(c), msg: "The mission asks for numeric addresses only. Which option skips DNS lookups?" }
+    ],
+    tutorNotes: "Teaching point: each line of traceroute output is one hop; the last line is the destination. Derived flag: students count the hops themselves.",
+    cehExamTip: "Exam Alert: traceroute shows every Layer 3 hop. Skipping reverse DNS with -n makes the trace faster and avoids extra DNS queries that a defender could notice.",
+    output: `traceroute to 10.10.1.40 (10.10.1.40), 30 hops max, 60 byte packets
+ 1  10.10.1.1  0.261 ms  0.228 ms  0.209 ms
+ 2  10.10.1.5  0.402 ms  0.377 ms  0.361 ms
+ 3  10.10.1.9  0.589 ms  0.553 ms  0.531 ms
+ 4  10.10.1.40  0.702 ms  0.677 ms  0.655 ms`,
+    flagEnc: "ICAgVgsbFl4pBU4=",
+    writeup: "<code>traceroute -n 10.10.1.40</code> listed the path as raw IP addresses. The server answered on line 4, so it is 4 hops away and the flag is <code>CEH{hops_4}</code>."
+  },
+  {
+    id: 113,
+    type: "ctf",
+    pairedWith: 51,
+    module: 2,
+    moduleTitle: "CTF · Footprinting & Reconnaissance",
+    title: "The Registrar's Notepad",
+    difficulty: "Beginner",
+    points: 150,
+    target: "ctf-corp.com",
+    prompt: "root@parrot:~#",
+    scenario: "The owner of ctf-corp.com filled in the public registration record of the domain and used one of the free-text fields as a notepad.",
+    task: "Look up the public registration record of ctf-corp.com and find the flag in it.",
+    solution: "whois ctf-corp.com",
+    accepted: [
+      (c) => /^whois\b/i.test(_n(c)) && _hasTarget(c, "ctf-corp.com")
+    ],
+    hints: [
+      "Hint 1: Domain ownership and registration data is public. There is a classic command-line tool for reading it.",
+      "Hint 2: Run the registration lookup tool against the domain name ctf-corp.com.",
+      "Hint 3: whois ctf-corp.com"
+    ],
+    diagnostics: [
+      { check: (c) => !/^whois\b/i.test(c), msg: "Which tool reads public domain registration records?" },
+      { check: (c) => !/ctf-corp\.com/i.test(c), msg: "Don't forget the domain: ctf-corp.com." }
+    ],
+    tutorNotes: "Teaching point: WHOIS free-text fields (organisation, comments) sometimes hold internal notes. It is passive reconnaissance: nothing touches the target.",
+    cehExamTip: "Exam Alert: WHOIS is passive footprinting. Registrant name, email, name servers and dates feed later phases such as social engineering and DNS testing.",
+    output: `   Domain Name: CTF-CORP.COM
+   Registry Domain ID: 2871120344_DOMAIN_COM-VRSN
+   Registrar WHOIS Server: whois.example-registrar.com
+   Registrar: Example Registrar, Inc.
+   Creation Date: 2019-03-14T08:21:55Z
+   Registry Expiry Date: 2027-03-14T08:21:55Z
+   Name Server: NS1.CTF-CORP.COM
+   Name Server: NS2.CTF-CORP.COM
+   DNSSEC: unsigned
+
+Registrant Organization: CTF Corp Ltd
+Registrant Country: US
+Registrant Comment: {{FLAG}}
+Admin Email: hostmaster@ctf-corp.com`,
+    flagEnc: "ICAgVhQcCUQFbloQOhhYARgPTilTSjwBDV4KEwhQ",
+    writeup: "<code>whois ctf-corp.com</code> printed the public registration record. The owner left a note in the <code>Registrant Comment</code> field, which anybody can read. WHOIS is passive reconnaissance: the target never sees the query."
   }
 ];

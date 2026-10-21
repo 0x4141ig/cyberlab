@@ -19,7 +19,7 @@
 // ships to the browser, and flags are only obfuscated.
 // ============================================================================
 
-const ALL_TASKS = (typeof CTF_QUESTIONS !== "undefined") ? CEH_QUESTIONS.concat(CTF_QUESTIONS) : CEH_QUESTIONS.slice();
+const ALL_TASKS = (typeof CTF_QUESTIONS !== "undefined") ? EDU_TASKS.concat(CTF_QUESTIONS) : EDU_TASKS.slice();
 
 const CTF_LOCAL_KEY = "ceh_ctf_config";
 const CTF_FLAG_KEY = "ceh-ctf-v13";
@@ -55,6 +55,11 @@ function ctfIndexes() {
   return out;
 }
 
+// Display number of an Education task: its position in the Education list (ids are only keys)
+function eduNumber(q) {
+  return eduIndexes().findIndex((i) => ALL_TASKS[i].id === q.id) + 1;
+}
+
 function ctfNumber(q) {
   return ctfIndexes().findIndex((i) => ALL_TASKS[i].id === q.id) + 1;
 }
@@ -66,7 +71,7 @@ function taskIndexById(id) {
 // Denominator for solved counts in the leaderboard / admin views:
 // every Education task plus the CTF tasks the tutor has opened
 function taskTotal() {
-  return CEH_QUESTIONS.length + ctfIndexes().filter((i) => isCtfLive(ALL_TASKS[i])).length;
+  return EDU_TASKS.length + ctfIndexes().filter((i) => isCtfLive(ALL_TASKS[i])).length;
 }
 
 // --------------------------------------------------------
@@ -556,7 +561,7 @@ function renderAdminCtfPanel() {
         <td style="width:34px; text-align:center;"><input type="checkbox" class="ctf-check" ${adminCtfSelection.has(q.id) ? "checked" : ""} onchange="adminToggleCtfSelect(${q.id}, this.checked)" /></td>
         <td style="font-weight:700; color:var(--text-muted);">🚩${ctfNumber(q)}</td>
         <td><strong style="color:var(--text-main);">${escapeHtml(q.title)}</strong><div style="font-size:0.7rem; color:var(--text-muted);">${escapeHtml(q.moduleTitle)}</div></td>
-        <td style="font-size:0.76rem;">${related ? `Task ${related.id}: ${escapeHtml(related.title)}` : "-"}</td>
+        <td style="font-size:0.76rem;">${related ? `Task ${eduNumber(related)}: ${escapeHtml(related.title)}` : "-"}</td>
         <td style="text-align:center;">${students.length ? `${solvedBy} / ${students.length}` : "-"}</td>
         <td style="text-align:center;">
           <button class="ctf-release-btn ${live ? "live" : "locked"}" onclick="adminToggleCtfRelease(${q.id})" title="${live ? "Click to close" : "Click to open"}">
