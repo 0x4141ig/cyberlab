@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CEH v13 Interactive Lab Walkthrough (Modules 1 - 5) | NetAcad & CTF</title>
-  <link rel="stylesheet" href="style.css?v=20261021_v12">
+  <link rel="stylesheet" href="style.css?v=20261021_v15">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap" rel="stylesheet">
@@ -267,6 +267,27 @@
         <!-- Dynamic Feedback / Guidance Box (Anti-copy protected) -->
         <div id="guidanceBox" class="guidance-box no-copy"></div>
 
+        <!-- CTF Mode: Locked Challenge Card (shown until the instructor releases the task) -->
+        <div id="ctfLockedCard" class="ctf-locked-card" style="display: none;">
+          <div class="ctf-locked-icon">🔒</div>
+          <h3>This CTF challenge is locked</h3>
+          <p>Your instructor will release it when the class is ready. Finish the Learn tasks in the meantime. This page updates automatically.</p>
+        </div>
+
+        <!-- CTF Mode: Flag Submission Card -->
+        <div id="ctfCard" class="ctf-card" style="display: none;">
+          <div class="ctf-card-head">
+            <span class="ctf-badge">🚩 CAPTURE THE FLAG</span>
+            <span class="ctf-card-note">Run the right command, find the flag in the output</span>
+          </div>
+          <form id="ctfFlagForm" class="ctf-flag-form" onsubmit="submitCtfFlag(event)" autocomplete="off">
+            <input type="text" id="ctfFlagInput" class="form-input" placeholder="CEH{...}" autocomplete="off" spellcheck="false" />
+            <button type="submit" id="ctfFlagSubmit" class="btn-primary">Submit Flag</button>
+          </form>
+          <div id="ctfFlagFeedback" class="ctf-feedback" style="display: none;"></div>
+          <div id="ctfWriteup" class="ctf-writeup" style="display: none;"></div>
+        </div>
+
         <!-- Concept & Purpose Analysis Question Card (Appears after executing command) -->
         <div id="conceptCard" class="concept-card">
           <div class="concept-header-bar">
@@ -303,7 +324,7 @@
 
         <!-- Action Buttons (No Paste Button to ensure manual typing) -->
         <div class="manual-actions">
-          <button class="btn-secondary" onclick="showHint()">
+          <button class="btn-secondary" id="btnHint" onclick="showHint()">
             💡 Need a Hint?
           </button>
           <button class="btn-secondary reveal" onclick="showSolution()">
@@ -373,6 +394,7 @@
           </div>
         </div>
 
+        <div id="ctfToast" class="ctf-toast" style="display: none;"></div>
         <div id="pasteToast" class="paste-warning-toast">
           ⚠️ Copy-paste is disabled! Type manually to build CLI muscle memory.
         </div>
@@ -546,6 +568,7 @@
         <div class="auth-tabs" style="margin-bottom: 16px;">
           <button class="auth-tab active" id="tabAdminRoster" onclick="setAdminTab('roster')">👥 Student Roster &amp; Live Tasks</button>
           <button class="auth-tab" id="tabAdminMatrix" onclick="setAdminTab('matrix')">📊 Class Task Matrix (Heatmap)</button>
+          <button class="auth-tab" id="tabAdminCtf" onclick="setAdminTab('ctf')">🚩 CTF Control</button>
           <button class="auth-tab" id="tabAdminTools" onclick="setAdminTab('tools')">⚙️ Actions &amp; CSV Export</button>
         </div>
 
@@ -579,7 +602,7 @@
         <!-- Tab 2: Class Task Matrix (Heatmap) -->
         <div id="adminTabContentMatrix" style="display: none;">
           <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">
-            Bird's-eye view of every student across all 25 lab challenges. <strong style="color:var(--accent-green);">✓</strong> = Solved, <strong style="color:var(--accent-cyan);">📍</strong> = Current Task.
+            Bird's-eye view of every student across all lab challenges (and CTF challenges while CTF mode is on). <strong style="color:var(--accent-green);">✓</strong> = Solved, <strong style="color:var(--accent-cyan);">📍</strong> = Current Task.
           </p>
           <div style="overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; max-height: 420px;">
             <table class="leaderboard-table" style="margin: 0; width: 100%; font-size: 0.74rem;">
@@ -594,6 +617,9 @@
             </table>
           </div>
         </div>
+
+        <!-- Tab: CTF Control (mode, learn/CTF pattern, release locks). Rendered by ctf.js -->
+        <div id="adminTabContentCtf" style="display: none;"></div>
 
         <!-- Tab 3: Actions & CSV Export -->
         <div id="adminTabContentTools" style="display: none;">
@@ -681,7 +707,9 @@
     </div>
   </div>
 
-  <script src="questions.js?v=20261021_v12"></script>
-  <script src="app.js?v=20261021_v12"></script>
+  <script src="questions.js?v=20261021_v15"></script>
+  <script src="ctf_questions.js?v=20261021_v15"></script>
+  <script src="ctf.js?v=20261021_v15"></script>
+  <script src="app.js?v=20261021_v15"></script>
 </body>
 </html>

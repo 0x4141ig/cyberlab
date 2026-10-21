@@ -2502,3 +2502,267 @@ header {
     min-width: 140px;
   }
 }
+
+/* ========================================================
+   CTF Mode: flag card, locked card, sidebar badges, tutor panel
+   ======================================================== */
+:root {
+  --ctf-accent: #ff6b3d;
+}
+
+/* CTF tasks never show the command breakdown, solution button or typing guide */
+.manual-content.ctf-mode #commandCard,
+.manual-content.ctf-mode .manual-actions .btn-secondary.reveal,
+body.ctf-task #btnTrackerToggle {
+  display: none !important;
+}
+
+/* Locked challenge: show only the header, title and the lock card */
+.manual-content.ctf-locked > *:not(.task-header-row):not(.task-title):not(#ctfLockedCard) {
+  display: none !important;
+}
+.manual-content.ctf-locked .points-pill {
+  display: none;
+}
+
+.ctf-locked-card {
+  text-align: center;
+  padding: 34px 20px;
+  border: 1px dashed rgba(255, 107, 61, 0.45);
+  border-radius: 10px;
+  background: rgba(255, 107, 61, 0.05);
+  animation: fadeIn 0.3s ease;
+}
+.ctf-locked-icon {
+  font-size: 2.4rem;
+  margin-bottom: 8px;
+}
+.ctf-locked-card h3 {
+  color: var(--ctf-accent);
+  font-size: 1.05rem;
+  margin: 0 0 8px;
+}
+.ctf-locked-card p {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ctf-card {
+  background: linear-gradient(135deg, rgba(255, 107, 61, 0.09), rgba(255, 23, 68, 0.04));
+  border: 1px solid rgba(255, 107, 61, 0.45);
+  border-radius: 8px;
+  padding: 14px;
+  animation: fadeIn 0.3s ease;
+}
+.ctf-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.ctf-badge {
+  color: var(--ctf-accent);
+  font-weight: 800;
+  font-size: 0.76rem;
+  letter-spacing: 0.8px;
+}
+.ctf-card-note {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+.ctf-flag-form {
+  display: flex;
+  gap: 8px;
+}
+.ctf-flag-form .form-input {
+  flex: 1;
+  font-family: var(--font-mono);
+  padding: 8px 12px;
+  font-size: 0.86rem;
+}
+.ctf-flag-form .btn-primary {
+  width: auto;
+  padding: 8px 16px;
+  font-size: 0.84rem;
+  white-space: nowrap;
+}
+.ctf-flag-form .btn-primary:disabled,
+.ctf-flag-form .form-input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ctf-feedback {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+.ctf-feedback.error {
+  background: rgba(255, 82, 82, 0.1);
+  border: 1px solid rgba(255, 82, 82, 0.4);
+  color: #ff8a80;
+}
+.ctf-writeup {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: rgba(0, 230, 118, 0.07);
+  border: 1px solid rgba(0, 230, 118, 0.3);
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: var(--text-main);
+}
+.ctf-writeup code {
+  color: var(--accent-yellow);
+  font-family: var(--font-mono);
+}
+
+.ctf-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 100001;
+  background: rgba(10, 16, 28, 0.97);
+  border: 1px solid var(--ctf-accent);
+  color: var(--text-main);
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  font-weight: 600;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.6), 0 0 18px rgba(255, 107, 61, 0.25);
+  animation: fadeIn 0.3s ease;
+}
+
+/* Sidebar: block headers and CTF cards */
+.sidebar-module-header.blk-edu { border-left-color: var(--accent-cyan); }
+.sidebar-module-header.blk-ctf { border-left-color: var(--ctf-accent); color: var(--ctf-accent); }
+.sidebar-module-header.blk-pool { border-left-color: var(--accent-purple); }
+
+.sidebar-task-card.ctf .sidebar-task-badge {
+  border-color: rgba(255, 107, 61, 0.5);
+}
+.sidebar-task-card.locked {
+  opacity: 0.62;
+}
+.sidebar-task-card.locked .sidebar-task-title {
+  font-style: italic;
+}
+
+/* Tutor panel (admin dashboard > CTF Control) */
+.ctf-admin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.ctf-admin-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+.ctf-admin-label {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.ctf-admin-status {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin: 6px 0;
+}
+.ctf-admin-status.on { color: var(--accent-green); }
+.ctf-admin-status.off { color: var(--text-muted); }
+.ctf-admin-help {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 8px 0;
+}
+.ctf-admin-help code {
+  color: var(--accent-yellow);
+  font-family: var(--font-mono);
+}
+.ctf-preset-row {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+.ctf-preset {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 4px 12px;
+  border-radius: 14px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ctf-preset.active,
+.ctf-preset:hover {
+  border-color: var(--ctf-accent);
+  color: var(--ctf-accent);
+}
+.ctf-pattern-row {
+  display: flex;
+  gap: 8px;
+}
+.ctf-pattern-row .form-input {
+  flex: 1;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+}
+.ctf-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+.ctf-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+}
+.ctf-chip.edu { color: var(--accent-cyan); border-color: rgba(0, 229, 255, 0.4); }
+.ctf-chip.ctf { color: var(--ctf-accent); border-color: rgba(255, 107, 61, 0.5); }
+.ctf-release-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.ctf-release-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ctf-release-btn {
+  border-radius: 14px;
+  padding: 4px 12px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid;
+  background: transparent;
+}
+.ctf-release-btn.live {
+  color: var(--accent-green);
+  border-color: rgba(0, 230, 118, 0.5);
+  background: rgba(0, 230, 118, 0.1);
+}
+.ctf-release-btn.locked {
+  color: var(--text-muted);
+  border-color: var(--border-color);
+}

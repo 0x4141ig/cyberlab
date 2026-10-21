@@ -31,6 +31,22 @@ Runs **100% in the browser** using pure HTML5, CSS3, and modern Vanilla JavaScri
 
 ---
 
+## 🚩 CTF Mode (Learn → Practice Path)
+
+Beyond the 38 guided Education labs, the platform has **walkthrough CTF challenges** (`ctf_questions.js`). A CTF task never shows the command: students read a mission, pick the tool, find a `CEH{...}` flag in the output and submit it. Hints are a 3-step ladder with small point costs, and a write-up appears after solving.
+
+The instructor controls everything from **Admin > 🚩 CTF Control**:
+
+| Setting | What it does |
+|---|---|
+| **CTF Mode ON/OFF** | OFF: students only see the Education labs. ON: students follow the learn/CTF path. |
+| **Path pattern** | `5:5` (5 learn, then 5 CTF, repeating), `1:1`, or custom like `E3,C1,E2,C2` (E = learn, C = CTF). |
+| **Release / Lock** | CTF tasks stay locked (and reveal nothing) until the instructor releases them. Changes reach students within seconds via the shared cloud bucket. |
+
+**Adding a CTF task:** copy an entry in `ctf_questions.js`, use the next id (101+), write the `output` with a `{{FLAG}}` placeholder, and generate `flagEnc` in the browser console with `ctfEncodeFlag("CEH{your_flag}")`.
+
+> Flags are obfuscated (XOR + base64), not encrypted, and release gating is a classroom pacing tool. Everything ships to the browser, so this is not a security boundary. Use a server-side check if you run a competitive event.
+
 ## 📚 Curriculum Breakdown (Modules 1–5)
 
 | Module | Topic | Tasks | Key Tools & Concepts |

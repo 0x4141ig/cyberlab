@@ -214,17 +214,53 @@ function renderTargetBadge(q) {
 }
 
 function loadQuestion(idx) {
-  if (idx < 0 || idx >= CEH_QUESTIONS.length) return;
+  if (idx < 0 || idx >= ALL_TASKS.length) return;
+
+  // Keep users inside the tasks their path exposes (CTF tasks stay hidden until CTF mode is on)
+  const layout = buildTaskLayout(currentUser);
+  if (layout.path.length && !layout.path.includes(idx)) idx = layout.path[0];
+
   currentIndex = idx;
-  const q = CEH_QUESTIONS[idx];
+  const q = ALL_TASKS[idx];
+  const isCtf = isCtfTask(q);
+  const locked = isTaskLocked(q, currentUser);
+  ctfLockedShown = locked;
+  setCtfPaneState(isCtf, locked);
+
+  elQuestionIndicator.innerText = `Task ${layout.path.indexOf(idx) + 1} of ${layout.path.length}`;
+  elPointsPill.innerText = `+${q.points || 100} PTS`;
+
+  // Terminal Prompt
+  elTerminalPrompt.innerText = q.prompt;
+  if (q.prompt.startsWith("msf")) {
+    elTerminalPrompt.classList.add("msf");
+  } else {
+    elTerminalPrompt.classList.remove("msf");
+  }
+  elTerminalInput.value = "";
+
+  if (locked) {
+    // Locked CTF challenge: reveal nothing about the task until the instructor releases it
+    elModuleTag.innerText = "🚩 CTF CHALLENGE";
+    elTaskTitle.innerText = `🔒 CTF Challenge ${ctfNumber(q)} — Locked`;
+    const lockedHud = document.getElementById("cliIntellisenseHud");
+    if (lockedHud) lockedHud.style.display = "none";
+    elTutorBox.style.display = "none";
+    hideGuidance();
+    elConceptCard.style.display = "none";
+    setTrackerVisible(false);
+    updateNavButtons();
+    renderQuestionGrid();
+    return;
+  }
 
   // Update Left Manual Pane
   elModuleTag.innerText = q.moduleTitle;
-  elTaskTitle.innerText = `Task ${q.id}: ${q.title}`;
+  elTaskTitle.innerText = isCtf ? `🚩 CTF ${ctfNumber(q)}: ${q.title}` : `Task ${q.id}: ${q.title}`;
   renderTargetBadge(q);
 
-  // Update Command Syntax & Argument Breakdown
-  renderCommandBreakdown(q);
+  // Update Command Syntax & Argument Breakdown (Education tasks only: CTF never shows the command)
+  if (!isCtf) renderCommandBreakdown(q);
   const hud = document.getElementById("cliIntellisenseHud");
   if (hud) hud.style.display = "none";
   updateCliIntellisense("");
@@ -232,8 +268,6 @@ function loadQuestion(idx) {
   elScenarioText.innerText = q.scenario;
   elTaskText.innerText = q.task;
   elExamTipText.innerText = q.cehExamTip;
-  elQuestionIndicator.innerText = `Task ${idx + 1} of ${CEH_QUESTIONS.length}`;
-  elPointsPill.innerText = `+${q.points || 100} PTS`;
 
   // Sync module filter chip if navigating across modules while filtered
   if (currentFilter !== "all" && q.module.toString() !== currentFilter) {
@@ -255,34 +289,38 @@ function loadQuestion(idx) {
   // Tutor Notes
   if (currentUser && currentUser.role === "admin") {
     elTutorBox.style.display = "block";
-    elTutorNotesText.innerText = q.tutorNotes || "Demonstrate command syntax and review output details with students.";
+    let notes = q.tutorNotes || "Demonstrate command syntax and review output details with students.";
+    if (isCtf) notes += `\n🔑 Solution: ${q.solution}\n🚩 Flag: ${getTaskFlag(q)}`;
+    elTutorNotesText.innerText = notes;
   } else {
     elTutorBox.style.display = "none";
   }
 
-  // Concept Card
   const isSolved = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved.includes(q.id) : false;
-  if (isSolved) {
-    showGuidance("success", `<strong>Challenge Solved!</strong> You've successfully executed this command.`);
-    renderConceptQuestion(q, true);
-  } else {
+  if (isCtf) {
+    // CTF: flag card instead of the concept question
     hideGuidance();
     elConceptCard.style.display = "none";
-  }
-
-  // Nav buttons
-  elBtnPrev.disabled = idx === 0;
-  elBtnNext.disabled = idx === CEH_QUESTIONS.length - 1;
-
-  // Terminal Prompt
-  elTerminalPrompt.innerText = q.prompt;
-  if (q.prompt.startsWith("msf")) {
-    elTerminalPrompt.classList.add("msf");
+    renderCtfCard(q, isSolved);
+    if (isSolved) {
+      showGuidance("success", `<strong>🚩 Flag Captured!</strong> You've completed this challenge.`);
+    } else {
+      renderCtfHints(q, ctfHintTier(q));
+    }
   } else {
-    elTerminalPrompt.classList.remove("msf");
+    updateCtfHintButton(q);
+    // Concept Card
+    if (isSolved) {
+      showGuidance("success", `<strong>Challenge Solved!</strong> You've successfully executed this command.`);
+      renderConceptQuestion(q, true);
+    } else {
+      hideGuidance();
+      elConceptCard.style.display = "none";
+    }
   }
 
-  elTerminalInput.value = "";
+  updateNavButtons();
+
   elTerminalInput.focus();
 
   // Reset Live Keystroke Tracker (Hidden by default for pro users)
@@ -290,6 +328,14 @@ function loadQuestion(idx) {
   updateKeystrokeTracker("");
 
   renderQuestionGrid();
+}
+
+// Previous / Next follow the user's task path (module order, or the learn/CTF pattern)
+function updateNavButtons() {
+  const path = buildTaskLayout(currentUser).path;
+  const pos = path.indexOf(currentIndex);
+  elBtnPrev.disabled = pos <= 0;
+  elBtnNext.disabled = pos === -1 || pos >= path.length - 1;
 }
 
 // Render Question Grid with Module Separation & Ability to Show All
@@ -309,77 +355,110 @@ function renderQuestionGrid() {
   const searchInput = document.getElementById("sidebarSearch");
   const searchTerm = (searchInput ? searchInput.value : "").toLowerCase().trim();
 
-  // Update total badge
+  const layout = buildTaskLayout(currentUser);
+  const viewTotal = layout.path.length;
+  const solvedList = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved : [];
+
+  // Update total badges
   const totalBadge = document.getElementById("sidebarTotalBadge");
-  if (totalBadge) totalBadge.innerText = `${CEH_QUESTIONS.length} Labs`;
+  if (totalBadge) totalBadge.innerText = `${viewTotal} Labs`;
+  const chipAll = document.querySelector('.filter-chip[data-module="all"]');
+  if (chipAll) chipAll.innerText = `All (${viewTotal})`;
+  const navBadge = document.querySelector(".btn-modules .header-count-badge");
+  if (navBadge) navBadge.innerText = viewTotal;
 
   // Update sidebar progress bar
-  const solvedCount = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved.length : 0;
-  const pct = Math.round((solvedCount / CEH_QUESTIONS.length) * 100);
+  const solvedCount = layout.path.filter((i) => solvedList.includes(ALL_TASKS[i].id)).length;
+  const pct = Math.round((solvedCount / (viewTotal || 1)) * 100);
   const elSidebarPct = document.getElementById("sidebarProgressPct");
   const elSidebarFill = document.getElementById("sidebarProgressFill");
-  if (elSidebarPct) elSidebarPct.innerText = `${solvedCount} / ${CEH_QUESTIONS.length} (${pct}%)`;
+  if (elSidebarPct) elSidebarPct.innerText = `${solvedCount} / ${viewTotal} (${pct}%)`;
   if (elSidebarFill) elSidebarFill.style.width = `${pct}%`;
 
-  const activeModules = currentFilter === "all"
-    ? modules
-    : modules.filter(m => m.id.toString() === currentFilter);
+  const matchesSearch = (q, locked) => {
+    if (!searchTerm) return true;
+    if (locked) return "locked ctf challenge".includes(searchTerm);
+    return q.title.toLowerCase().includes(searchTerm) || q.task.toLowerCase().includes(searchTerm) || q.id.toString() === searchTerm;
+  };
 
-  activeModules.forEach(mod => {
-    let modQuestions = [];
-    CEH_QUESTIONS.forEach((q, idx) => {
-      if (q.module === mod.id) {
-        if (!searchTerm || q.title.toLowerCase().includes(searchTerm) || q.task.toLowerCase().includes(searchTerm) || q.id.toString() === searchTerm) {
-          modQuestions.push({ q, idx });
-        }
-      }
+  layout.groups.forEach(group => {
+    if (group.kind === "module" && currentFilter !== "all" && group.mod.toString() !== currentFilter) return;
+
+    const items = group.items.filter((idx) => {
+      const q = ALL_TASKS[idx];
+      if (currentFilter !== "all" && q.module.toString() !== currentFilter) return false;
+      return matchesSearch(q, isTaskLocked(q, currentUser));
     });
 
-    if (modQuestions.length === 0) return;
+    if (items.length === 0) return;
 
-    const group = document.createElement("div");
-    group.className = "sidebar-module-group";
+    const groupEl = document.createElement("div");
+    groupEl.className = "sidebar-module-group";
 
-    const solvedInMod = modQuestions.filter(({ q }) => (currentUser && Array.isArray(currentUser.solved)) && currentUser.solved.includes(q.id)).length;
+    const solvedInGroup = items.filter((idx) => solvedList.includes(ALL_TASKS[idx].id)).length;
 
     const header = document.createElement("div");
-    header.className = `sidebar-module-header mod-${mod.id}`;
-    header.innerHTML = `
-      <span>Mod 0${mod.id}: ${mod.name}</span>
-      <span class="sidebar-module-stat">${solvedInMod}/${modQuestions.length}</span>
-    `;
-    group.appendChild(header);
+    if (group.kind === "module") {
+      const mod = modules.find((m) => m.id === group.mod) || { id: group.mod, name: "Module " + group.mod };
+      header.className = `sidebar-module-header mod-${mod.id}`;
+      header.innerHTML = `
+        <span>Mod 0${mod.id}: ${mod.name}</span>
+        <span class="sidebar-module-stat">${solvedInGroup}/${items.length}</span>
+      `;
+    } else {
+      header.className = `sidebar-module-header blk-${group.kind}`;
+      header.innerHTML = `
+        <span>${group.title}</span>
+        <span class="sidebar-module-stat">${solvedInGroup}/${items.length}</span>
+      `;
+    }
+    groupEl.appendChild(header);
 
-    modQuestions.forEach(({ q, idx }) => {
-      const isSolved = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved.includes(q.id) : false;
+    items.forEach((idx) => {
+      const q = ALL_TASKS[idx];
+      const isCtf = isCtfTask(q);
+      const locked = isTaskLocked(q, currentUser);
+      const isSolved = solvedList.includes(q.id);
       const isActive = idx === currentIndex;
 
       const card = document.createElement("div");
-      card.className = `sidebar-task-card ${isActive ? "active" : ""} ${isSolved ? "completed" : ""}`;
+      card.className = `sidebar-task-card ${isActive ? "active" : ""} ${isSolved ? "completed" : ""} ${isCtf ? "ctf" : ""} ${locked ? "locked" : ""}`;
       card.id = `sidebarTask_${idx}`;
       card.onclick = () => loadQuestion(idx);
 
       const badge = document.createElement("div");
       badge.className = "sidebar-task-badge";
-      badge.innerHTML = isSolved ? "✓" : q.id;
+      badge.innerHTML = isSolved ? "✓" : (locked ? "🔒" : (isCtf ? "🚩" : q.id));
+
+      const title = locked ? `Locked CTF Challenge ${ctfNumber(q)}` : q.title;
+      let meta;
+      if (locked) {
+        meta = `<span>Waiting for your instructor</span>`;
+      } else if (isCtf) {
+        const status = currentUser && currentUser.role === "admin"
+          ? `<span style="opacity:0.8;">${isCtfLive(q) ? "LIVE" : "NOT RELEASED"}</span>`
+          : `<span style="opacity:0.8;">CTF</span>`;
+        meta = `<span>+${q.points || 150} pts</span><span>•</span>${status}`;
+      } else {
+        meta = `
+          <span>+${q.points || 100} pts</span>
+          <span>•</span>
+          <span style="opacity:0.8;">${q.target ? q.target.split(' ')[0] : 'Lab'}</span>`;
+      }
 
       const info = document.createElement("div");
       info.className = "sidebar-task-info";
       info.innerHTML = `
-        <div class="sidebar-task-title" title="${q.title}">${q.title}</div>
-        <div class="sidebar-task-meta">
-          <span>+${q.points || 100} pts</span>
-          <span>•</span>
-          <span style="opacity:0.8;">${q.target ? q.target.split(' ')[0] : 'Lab'}</span>
-        </div>
+        <div class="sidebar-task-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+        <div class="sidebar-task-meta">${meta}</div>
       `;
 
       card.appendChild(badge);
       card.appendChild(info);
-      group.appendChild(card);
+      groupEl.appendChild(card);
     });
 
-    elQuestionGrid.appendChild(group);
+    elQuestionGrid.appendChild(groupEl);
   });
 
   if (!elQuestionGrid.children.length) {
@@ -453,6 +532,7 @@ function updateAuthUI() {
   if (btnSignOut) btnSignOut.style.display = "inline-flex";
   elUserDisplay.innerText = currentUser.username;
   elUserScore.innerText = `${currentUser.score} pts`;
+  startCtfSync(); // keep CTF mode / release state in step with the instructor
 
   if (currentUser.role === "admin") {
     elRoleBadge.className = "role-badge tutor";
@@ -503,9 +583,11 @@ function updateAuthUI() {
 
 // Progress Bar
 function updateProgress() {
-  const total = CEH_QUESTIONS.length;
-  const done = currentUser ? currentUser.solved.length : 0;
-  const pct = Math.round((done / total) * 100);
+  const path = buildTaskLayout(currentUser).path;
+  const solvedList = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved : [];
+  const total = path.length;
+  const done = path.filter((i) => solvedList.includes(ALL_TASKS[i].id)).length;
+  const pct = Math.round((done / (total || 1)) * 100);
   if (elProgressBarFill) elProgressBarFill.style.width = `${pct}%`;
   if (elProgressText) elProgressText.innerText = `${done} / ${total} (${pct}%)`;
 
@@ -525,24 +607,16 @@ function evaluateCommand(userCmd) {
     return;
   }
 
-  const q = CEH_QUESTIONS[currentIndex];
+  const q = ALL_TASKS[currentIndex];
   const trimmed = userCmd.trim();
 
   if (!trimmed) return;
+  if (isTaskLocked(q, currentUser)) return;
 
   appendTerminalBlock(q.prompt, trimmed);
 
   // Check acceptance
-  let isCorrect = false;
-  for (let rule of q.accepted) {
-    if (typeof rule === "string" && trimmed.toLowerCase() === rule.toLowerCase()) {
-      isCorrect = true;
-      break;
-    } else if (rule instanceof RegExp && rule.test(trimmed)) {
-      isCorrect = true;
-      break;
-    }
-  }
+  let isCorrect = q.accepted.some((rule) => matchesAcceptedRule(rule, trimmed));
 
   // Flexible argument fallback: check if stripping harmless pro flags (-Pn, -T4, -T3, -v, -vv, --reason, sudo ) matches
   if (!isCorrect) {
@@ -553,19 +627,25 @@ function evaluateCommand(userCmd) {
       .replace(/\s+(-v|-vv|--reason)\b/g, "")
       .trim();
 
-    for (let rule of q.accepted) {
-      if (typeof rule === "string" && stripped.toLowerCase() === rule.toLowerCase()) {
-        isCorrect = true;
-        break;
-      } else if (rule instanceof RegExp && rule.test(stripped)) {
-        isCorrect = true;
-        break;
-      }
-    }
+    isCorrect = q.accepted.some((rule) => matchesAcceptedRule(rule, stripped));
   }
 
   if (isCorrect) {
     playBeep(true);
+
+    if (isCtfTask(q)) {
+      // CTF: show output with the flag injected, then wait for the flag submission
+      appendHighlightedOutput(resolveTaskOutput(q, trimmed));
+      showGuidance(
+        "success",
+        `<strong>Command Accepted!</strong> Output generated.<br>
+         Read it carefully, find the <strong>flag</strong> and submit it in the 🚩 box above.`
+      );
+      const flagInput = document.getElementById("ctfFlagInput");
+      if (flagInput && !flagInput.disabled) flagInput.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      return;
+    }
+
     appendHighlightedOutput(q.output, q.highlightText);
 
     if (currentUser) {
@@ -609,6 +689,10 @@ function evaluateCommand(userCmd) {
       }
     }
 
+    if (!diagnosticMsg && isCtfTask(q)) {
+      diagnosticMsg = "That command didn't surface what the mission asks for. Re-read the objective, think about which tool fits, or use a hint.";
+    }
+
     if (!diagnosticMsg) {
       if (!trimmed.includes("10.10.1.22") && !trimmed.includes("certifiedhacker.com") && !trimmed.startsWith("use")) {
         diagnosticMsg = "Missing or incorrect target identifier (check IP / domain).";
@@ -634,7 +718,8 @@ function evaluateCommand(userCmd) {
 function updateKeystrokeTracker(typedValue) {
   if (!elCliTracker || !elTrackerDisplay) return;
 
-  const q = CEH_QUESTIONS[currentIndex];
+  const q = ALL_TASKS[currentIndex];
+  if (isCtfTask(q)) return; // CTF tasks never reveal the command through the typing guide
   const target = q.solution;
   const typed = typedValue;
 
@@ -689,6 +774,7 @@ function updateKeystrokeTracker(typedValue) {
 }
 
 function toggleTracker() {
+  if (isCtfTask(ALL_TASKS[currentIndex])) return;
   setTrackerVisible(!trackerEnabled);
 }
 
@@ -820,21 +906,29 @@ function escapeHtml(text) {
 
 // Next / Prev Nav
 function nextQuestion() {
-  if (currentIndex < CEH_QUESTIONS.length - 1) {
-    loadQuestion(currentIndex + 1);
+  const path = buildTaskLayout(currentUser).path;
+  const pos = path.indexOf(currentIndex);
+  if (pos !== -1 && pos < path.length - 1) {
+    loadQuestion(path[pos + 1]);
   }
 }
 
 function prevQuestion() {
-  if (currentIndex > 0) {
-    loadQuestion(currentIndex - 1);
+  const path = buildTaskLayout(currentUser).path;
+  const pos = path.indexOf(currentIndex);
+  if (pos > 0) {
+    loadQuestion(path[pos - 1]);
   }
 }
 
 // Hint & Solution (Strictly NO Copy/Paste - forces typing)
 function showHint() {
-  const q = CEH_QUESTIONS[currentIndex];
+  const q = ALL_TASKS[currentIndex];
   if (!q) return;
+  if (isCtfTask(q)) {
+    showCtfHint(q);
+    return;
+  }
 
   if (currentUser && currentUser.role === "student") {
     if (!currentUser.penalties) currentUser.penalties = {};
@@ -851,8 +945,8 @@ function showHint() {
 }
 
 function showSolution() {
-  const q = CEH_QUESTIONS[currentIndex];
-  if (!q) return;
+  const q = ALL_TASKS[currentIndex];
+  if (!q || isCtfTask(q)) return;
 
   if (currentUser && currentUser.role === "student") {
     if (!currentUser.penalties) currentUser.penalties = {};
@@ -1853,8 +1947,9 @@ async function handleLogin(e) {
       };
       saveStoredUsers(users);
 
-      if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
-        currentIndex = currentUser.currentTaskId - 1;
+      const restoredIdx = currentUser.currentTaskId ? taskIndexById(currentUser.currentTaskId) : -1;
+      if (restoredIdx !== -1) {
+        currentIndex = restoredIdx;
       }
 
       // Unlock and show app workspace
@@ -1891,8 +1986,9 @@ async function handleLogin(e) {
         };
         sessionStorage.setItem("ceh_current_user", u);
         localStorage.setItem("ceh_last_username", u);
-        if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
-          currentIndex = currentUser.currentTaskId - 1;
+        const restoredIdx = currentUser.currentTaskId ? taskIndexById(currentUser.currentTaskId) : -1;
+        if (restoredIdx !== -1) {
+          currentIndex = restoredIdx;
         }
         cloudSaveUserProgress(currentUser);
         syncUserScoreToCloud();
@@ -1929,8 +2025,9 @@ async function handleLogin(e) {
     };
     sessionStorage.setItem("ceh_current_user", u);
     localStorage.setItem("ceh_last_username", u);
-    if (currentUser.currentTaskId && currentUser.currentTaskId >= 1 && currentUser.currentTaskId <= CEH_QUESTIONS.length) {
-      currentIndex = currentUser.currentTaskId - 1;
+    const restoredIdx = currentUser.currentTaskId ? taskIndexById(currentUser.currentTaskId) : -1;
+    if (restoredIdx !== -1) {
+      currentIndex = restoredIdx;
     }
     cloudSaveUserProgress(currentUser);
     syncUserScoreToCloud();
@@ -2099,7 +2196,7 @@ function renderLeaderboardRows(lb) {
     tr.innerHTML = `
       <td>${rankBadge}</td>
       <td><strong>${escapeHtml(entry.username)}</strong> ${currentUser && entry.username === currentUser.username ? '<span style="color:var(--accent-cyan); font-size:0.75rem;">(You)</span>' : ''}</td>
-      <td>${entry.solvedCount} / ${CEH_QUESTIONS.length}</td>
+      <td>${entry.solvedCount} / ${taskTotal()}</td>
       <td style="color:var(--accent-yellow); font-weight:700;">${entry.score} pts</td>
       <td style="color:var(--text-muted); font-size:0.78rem;">${entry.lastActive || 'Just now'}</td>
     `;
@@ -2158,23 +2255,30 @@ function closeAdminPortal() {
 function setAdminTab(tab) {
   const tabRoster = document.getElementById("tabAdminRoster");
   const tabMatrix = document.getElementById("tabAdminMatrix");
+  const tabCtf = document.getElementById("tabAdminCtf");
   const tabTools = document.getElementById("tabAdminTools");
 
   const contentRoster = document.getElementById("adminTabContentRoster");
   const contentMatrix = document.getElementById("adminTabContentMatrix");
+  const contentCtf = document.getElementById("adminTabContentCtf");
   const contentTools = document.getElementById("adminTabContentTools");
 
   if (!tabRoster || !contentRoster) return;
 
-  [tabRoster, tabMatrix, tabTools].forEach(t => t && t.classList.remove("active"));
+  [tabRoster, tabMatrix, tabCtf, tabTools].forEach(t => t && t.classList.remove("active"));
   if (contentRoster) contentRoster.style.display = "none";
   if (contentMatrix) contentMatrix.style.display = "none";
+  if (contentCtf) contentCtf.style.display = "none";
   if (contentTools) contentTools.style.display = "none";
 
   if (tab === "matrix") {
     tabMatrix.classList.add("active");
     contentMatrix.style.display = "block";
     renderAdminMatrix(adminCachedStudents);
+  } else if (tab === "ctf" && tabCtf && contentCtf) {
+    tabCtf.classList.add("active");
+    contentCtf.style.display = "block";
+    renderAdminCtfPanel();
   } else if (tab === "tools") {
     tabTools.classList.add("active");
     contentTools.style.display = "block";
@@ -2292,6 +2396,7 @@ async function refreshAdminPortal() {
 
   renderAdminStudentTable(adminCachedStudents);
   renderAdminMatrix(adminCachedStudents);
+  renderAdminCtfPanel();
 }
 
 function renderAdminStudentTable(students) {
@@ -2316,7 +2421,7 @@ function renderAdminStudentTable(students) {
     const taskTitle = s.currentTaskTitle || "Host Reachability & ICMP Verification";
     const taskModule = s.currentTaskModule || "Module 01: Introduction to Ethical Hacking";
     const solvedCount = s.solvedCount || (Array.isArray(s.solved) ? s.solved.length : 0);
-    const pct = Math.round((solvedCount / CEH_QUESTIONS.length) * 100);
+    const pct = Math.min(100, Math.round((solvedCount / taskTotal()) * 100));
 
     tr.innerHTML = `
       <td style="font-weight: 700; color: var(--text-muted);">${idx + 1}</td>
@@ -2338,7 +2443,7 @@ function renderAdminStudentTable(students) {
       </td>
       <td>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <span style="font-weight: 600; font-size: 0.82rem;">${solvedCount} / ${CEH_QUESTIONS.length}</span>
+          <span style="font-weight: 600; font-size: 0.82rem;">${solvedCount} / ${taskTotal()}</span>
           <div style="flex: 1; height: 6px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; min-width: 50px;">
             <div style="width: ${pct}%; height: 100%; background: var(--accent-green); border-radius: 3px;"></div>
           </div>
@@ -2366,18 +2471,21 @@ function renderAdminMatrix(students) {
   const matrixBody = document.getElementById("adminMatrixBody");
   if (!headerTr || !matrixBody) return;
 
-  // Build header Q1..Q25
+  // Columns: Education tasks, plus CTF tasks while CTF mode is on
+  const matrixTasks = ctfConfig.enabled ? ALL_TASKS : CEH_QUESTIONS;
+  const colLabel = (t) => (isCtfTask(t) ? `🚩${ctfNumber(t)}` : `Q${t.id}`);
+
   let hHtml = `<th style="position: sticky; left: 0; background: var(--bg-card); z-index: 2; min-width: 120px;">Student</th>`;
-  for (let q = 1; q <= CEH_QUESTIONS.length; q++) {
-    hHtml += `<th style="text-align: center; width: 28px; padding: 4px 2px;" title="Task ${q}: ${escapeHtml(CEH_QUESTIONS[q - 1]?.title || '')}">Q${q}</th>`;
-  }
+  matrixTasks.forEach((t) => {
+    hHtml += `<th style="text-align: center; width: 28px; padding: 4px 2px;" title="${isCtfTask(t) ? "CTF" : "Task"} ${isCtfTask(t) ? ctfNumber(t) : t.id}: ${escapeHtml(t.title || '')}">${colLabel(t)}</th>`;
+  });
   hHtml += `<th style="text-align: center; width: 60px;">Total</th>`;
   headerTr.innerHTML = hHtml;
 
   // Build student rows
   matrixBody.innerHTML = "";
   if (!students || students.length === 0) {
-    matrixBody.innerHTML = `<tr><td colspan="${CEH_QUESTIONS.length + 2}" style="text-align:center; padding:20px; color:var(--text-muted);">No student data available.</td></tr>`;
+    matrixBody.innerHTML = `<tr><td colspan="${matrixTasks.length + 2}" style="text-align:center; padding:20px; color:var(--text-muted);">No student data available.</td></tr>`;
     return;
   }
 
@@ -2387,16 +2495,19 @@ function renderAdminMatrix(students) {
     const currentQ = Number(s.currentTaskId) || 1;
 
     let rowHtml = `<td style="position: sticky; left: 0; background: var(--bg-card); z-index: 1; font-weight: 600;">${escapeHtml(s.username)}</td>`;
-    for (let q = 1; q <= CEH_QUESTIONS.length; q++) {
-      if (solvedSet.has(q)) {
-        rowHtml += `<td class="matrix-cell matrix-solved" title="Q${q}: Solved (Passed)">✓</td>`;
-      } else if (q === currentQ) {
-        rowHtml += `<td class="matrix-cell matrix-current" title="Q${q}: Active Current Task">📍</td>`;
+    let solvedHere = 0;
+    matrixTasks.forEach((t) => {
+      const label = colLabel(t);
+      if (solvedSet.has(t.id)) {
+        solvedHere++;
+        rowHtml += `<td class="matrix-cell matrix-solved" title="${label}: Solved (Passed)">✓</td>`;
+      } else if (t.id === currentQ) {
+        rowHtml += `<td class="matrix-cell matrix-current" title="${label}: Active Current Task">📍</td>`;
       } else {
         rowHtml += `<td class="matrix-cell" style="color: var(--text-muted); opacity: 0.35;">·</td>`;
       }
-    }
-    rowHtml += `<td style="text-align: center; font-weight: 700; color: var(--accent-cyan);">${solvedSet.size} / ${CEH_QUESTIONS.length}</td>`;
+    });
+    rowHtml += `<td style="text-align: center; font-weight: 700; color: var(--accent-cyan);">${solvedHere} / ${matrixTasks.length}</td>`;
     tr.innerHTML = rowHtml;
     matrixBody.appendChild(tr);
   });
@@ -2425,7 +2536,7 @@ function exportAdminCSV() {
     s.currentTaskId || 1,
     `"${(s.currentTaskTitle || "Host Reachability").replace(/"/g, '""')}"`,
     s.solvedCount || 0,
-    CEH_QUESTIONS.length,
+    taskTotal(),
     s.score || 0,
     `"${(s.lastActive || "Recently").replace(/"/g, '""')}"`,
     s.updatedAt ? new Date(s.updatedAt).toISOString() : new Date().toISOString()
@@ -2910,6 +3021,11 @@ function updateCliIntellisense(rawInput) {
   const hudFooterTipText = document.getElementById("hudFooterTipText");
 
   if (!hud || !hudBadge || !hudTokenName || !hudTypeLabel || !hudBodyText || !hudFooterTipText) return;
+
+  if (isCtfTask(ALL_TASKS[currentIndex])) {
+    hud.style.display = "none";
+    return;
+  }
 
   if (!rawInput || !rawInput.trim()) {
     hud.style.display = "none";
