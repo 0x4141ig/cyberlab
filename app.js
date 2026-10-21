@@ -227,7 +227,9 @@ function loadQuestion(idx) {
   ctfLockedShown = locked;
   setCtfPaneState(isCtf, locked);
 
-  elQuestionIndicator.innerText = `Task ${layout.path.indexOf(idx) + 1} of ${layout.path.length}`;
+  elQuestionIndicator.innerText = locked
+    ? "🔒 CTF locked"
+    : `Task ${layout.navPath.indexOf(idx) + 1} of ${layout.navPath.length}`;
   elPointsPill.innerText = `+${q.points || 100} PTS`;
 
   // Terminal Prompt
@@ -332,14 +334,76 @@ function loadQuestion(idx) {
 
 // Previous / Next follow the user's task path (module order, or the learn/CTF pattern)
 function updateNavButtons() {
-  const path = buildTaskLayout(currentUser).path;
-  const pos = path.indexOf(currentIndex);
-  elBtnPrev.disabled = pos <= 0;
-  elBtnNext.disabled = pos === -1 || pos >= path.length - 1;
+  elBtnPrev.disabled = navTarget(-1) === -1;
+  elBtnNext.disabled = navTarget(1) === -1;
 }
 
 // Render Question Grid with Module Separation & Ability to Show All
 // Render Modules & Tasks in Dedicated Left Sidebar
+// Full-width sidebar card for a Learn task (or a CTF task that has no Learn pair)
+function buildSidebarCard(idx, solvedList) {
+  const q = ALL_TASKS[idx];
+  const isCtf = isCtfTask(q);
+  const locked = isTaskLocked(q, currentUser);
+  const isSolved = solvedList.includes(q.id);
+  const isActive = idx === currentIndex;
+
+  const card = document.createElement("div");
+  card.className = `sidebar-task-card ${isActive ? "active" : ""} ${isSolved ? "completed" : ""} ${isCtf ? "ctf" : ""} ${locked ? "locked" : ""}`;
+  card.id = `sidebarTask_${idx}`;
+  card.onclick = () => loadQuestion(idx);
+
+  const badge = document.createElement("div");
+  badge.className = "sidebar-task-badge";
+  badge.innerHTML = isSolved ? "✓" : (locked ? "🔒" : (isCtf ? "🚩" : q.id));
+
+  const title = locked ? `Locked CTF Challenge ${ctfNumber(q)}` : q.title;
+  let meta;
+  if (locked) {
+    meta = `<span>Waiting for your instructor</span>`;
+  } else if (isCtf) {
+    const status = currentUser && currentUser.role === "admin"
+      ? `<span style="opacity:0.8;">${isCtfLive(q) ? "LIVE" : "NOT RELEASED"}</span>`
+      : `<span style="opacity:0.8;">CTF</span>`;
+    meta = `<span>+${q.points || 150} pts</span><span>•</span>${status}`;
+  } else {
+    meta = `
+      <span>+${q.points || 100} pts</span>
+      <span>•</span>
+      <span style="opacity:0.8;">${q.target ? q.target.split(' ')[0] : 'Lab'}</span>`;
+  }
+
+  const info = document.createElement("div");
+  info.className = "sidebar-task-info";
+  info.innerHTML = `
+    <div class="sidebar-task-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
+    <div class="sidebar-task-meta">${meta}</div>
+  `;
+
+  card.appendChild(badge);
+  card.appendChild(info);
+  return card;
+}
+
+// Compact CTF card that sits beside the Learn task it practises
+function buildCtfMiniCard(idx, solvedList) {
+  const q = ALL_TASKS[idx];
+  const locked = isTaskLocked(q, currentUser);
+  const isSolved = solvedList.includes(q.id);
+  const isAdmin = Boolean(currentUser && currentUser.role === "admin");
+
+  const mini = document.createElement("div");
+  mini.className = `sidebar-ctf-mini ${idx === currentIndex ? "active" : ""} ${isSolved ? "completed" : ""} ${locked ? "locked" : ""} ${isAdmin ? (isCtfLive(q) ? "live" : "notlive") : ""}`;
+  mini.id = `sidebarTask_${idx}`;
+  mini.title = locked ? `CTF ${ctfNumber(q)} (locked)` : `CTF ${ctfNumber(q)}: ${q.title}`;
+  mini.onclick = () => loadQuestion(idx);
+
+  const icon = isSolved ? "✓" : (locked ? "🔒" : "🚩");
+  const sub = isAdmin ? (isCtfLive(q) ? "LIVE" : "OFF") : (locked ? "Locked" : `+${q.points || 150}`);
+  mini.innerHTML = `<span class="mini-icon">${icon}</span><span class="mini-label">CTF ${ctfNumber(q)}</span><span class="mini-sub">${sub}</span>`;
+  return mini;
+}
+
 function renderQuestionGrid() {
   if (!elQuestionGrid) return;
   elQuestionGrid.innerHTML = "";
@@ -382,80 +446,47 @@ function renderQuestionGrid() {
   };
 
   layout.groups.forEach(group => {
-    if (group.kind === "module" && currentFilter !== "all" && group.mod.toString() !== currentFilter) return;
+    if (currentFilter !== "all" && group.mod.toString() !== currentFilter) return;
 
-    const items = group.items.filter((idx) => {
-      const q = ALL_TASKS[idx];
-      if (currentFilter !== "all" && q.module.toString() !== currentFilter) return false;
-      return matchesSearch(q, isTaskLocked(q, currentUser));
+    // A row shows when its Learn task matches, or when one of its CTF twins matches the search
+    const rows = group.rows.filter((row) => {
+      const ids = [row.idx, ...row.twins];
+      return ids.some((i) => matchesSearch(ALL_TASKS[i], isTaskLocked(ALL_TASKS[i], currentUser)));
     });
 
-    if (items.length === 0) return;
+    if (rows.length === 0) return;
 
     const groupEl = document.createElement("div");
     groupEl.className = "sidebar-module-group";
 
-    const solvedInGroup = items.filter((idx) => solvedList.includes(ALL_TASKS[idx].id)).length;
+    const groupIdx = rows.flatMap((row) => [row.idx, ...row.twins]);
+    const solvedInGroup = groupIdx.filter((i) => solvedList.includes(ALL_TASKS[i].id)).length;
 
+    const mod = modules.find((m) => m.id === group.mod) || { id: group.mod, name: "Module " + group.mod };
     const header = document.createElement("div");
-    if (group.kind === "module") {
-      const mod = modules.find((m) => m.id === group.mod) || { id: group.mod, name: "Module " + group.mod };
-      header.className = `sidebar-module-header mod-${mod.id}`;
-      header.innerHTML = `
-        <span>Mod 0${mod.id}: ${mod.name}</span>
-        <span class="sidebar-module-stat">${solvedInGroup}/${items.length}</span>
-      `;
-    } else {
-      header.className = `sidebar-module-header blk-${group.kind}`;
-      header.innerHTML = `
-        <span>${group.title}</span>
-        <span class="sidebar-module-stat">${solvedInGroup}/${items.length}</span>
-      `;
-    }
+    header.className = `sidebar-module-header mod-${mod.id}`;
+    header.innerHTML = `
+      <span>Mod 0${mod.id}: ${mod.name}</span>
+      <span class="sidebar-module-stat">${solvedInGroup}/${groupIdx.length}</span>
+    `;
     groupEl.appendChild(header);
 
-    items.forEach((idx) => {
-      const q = ALL_TASKS[idx];
-      const isCtf = isCtfTask(q);
-      const locked = isTaskLocked(q, currentUser);
-      const isSolved = solvedList.includes(q.id);
-      const isActive = idx === currentIndex;
-
-      const card = document.createElement("div");
-      card.className = `sidebar-task-card ${isActive ? "active" : ""} ${isSolved ? "completed" : ""} ${isCtf ? "ctf" : ""} ${locked ? "locked" : ""}`;
-      card.id = `sidebarTask_${idx}`;
-      card.onclick = () => loadQuestion(idx);
-
-      const badge = document.createElement("div");
-      badge.className = "sidebar-task-badge";
-      badge.innerHTML = isSolved ? "✓" : (locked ? "🔒" : (isCtf ? "🚩" : q.id));
-
-      const title = locked ? `Locked CTF Challenge ${ctfNumber(q)}` : q.title;
-      let meta;
-      if (locked) {
-        meta = `<span>Waiting for your instructor</span>`;
-      } else if (isCtf) {
-        const status = currentUser && currentUser.role === "admin"
-          ? `<span style="opacity:0.8;">${isCtfLive(q) ? "LIVE" : "NOT RELEASED"}</span>`
-          : `<span style="opacity:0.8;">CTF</span>`;
-        meta = `<span>+${q.points || 150} pts</span><span>•</span>${status}`;
-      } else {
-        meta = `
-          <span>+${q.points || 100} pts</span>
-          <span>•</span>
-          <span style="opacity:0.8;">${q.target ? q.target.split(' ')[0] : 'Lab'}</span>`;
+    rows.forEach((row) => {
+      const card = buildSidebarCard(row.idx, solvedList);
+      if (!row.twins.length) {
+        groupEl.appendChild(card);
+        return;
       }
 
-      const info = document.createElement("div");
-      info.className = "sidebar-task-info";
-      info.innerHTML = `
-        <div class="sidebar-task-title" title="${escapeHtml(title)}">${escapeHtml(title)}</div>
-        <div class="sidebar-task-meta">${meta}</div>
-      `;
-
-      card.appendChild(badge);
-      card.appendChild(info);
-      groupEl.appendChild(card);
+      // Learn task on the left, its CTF challenge(s) on the right
+      const rowEl = document.createElement("div");
+      rowEl.className = "sidebar-task-row";
+      rowEl.appendChild(card);
+      const col = document.createElement("div");
+      col.className = "sidebar-ctf-col";
+      row.twins.forEach((ci) => col.appendChild(buildCtfMiniCard(ci, solvedList)));
+      rowEl.appendChild(col);
+      groupEl.appendChild(rowEl);
     });
 
     elQuestionGrid.appendChild(groupEl);
@@ -906,19 +937,13 @@ function escapeHtml(text) {
 
 // Next / Prev Nav
 function nextQuestion() {
-  const path = buildTaskLayout(currentUser).path;
-  const pos = path.indexOf(currentIndex);
-  if (pos !== -1 && pos < path.length - 1) {
-    loadQuestion(path[pos + 1]);
-  }
+  const target = navTarget(1);
+  if (target !== -1) loadQuestion(target);
 }
 
 function prevQuestion() {
-  const path = buildTaskLayout(currentUser).path;
-  const pos = path.indexOf(currentIndex);
-  if (pos > 0) {
-    loadQuestion(path[pos - 1]);
-  }
+  const target = navTarget(-1);
+  if (target !== -1) loadQuestion(target);
 }
 
 // Hint & Solution (Strictly NO Copy/Paste - forces typing)

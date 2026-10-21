@@ -35,15 +35,17 @@ Runs **100% in the browser** using pure HTML5, CSS3, and modern Vanilla JavaScri
 
 Beyond the 38 guided Education labs, the platform has **walkthrough CTF challenges** (`ctf_questions.js`). A CTF task never shows the command: students read a mission, pick the tool, find a `CEH{...}` flag in the output and submit it. Hints are a 3-step ladder with small point costs, and a write-up appears after solving.
 
+Each CTF task is paired with the Learn task it practises (`pairedWith` in `ctf_questions.js`) and appears **beside it in the sidebar**. After a student captures a flag, it is shown with a **Copy** button.
+
 The instructor controls everything from **Admin > 🚩 CTF Control**:
 
 | Setting | What it does |
 |---|---|
-| **CTF Mode ON/OFF** | OFF: students only see the Education labs. ON: students follow the learn/CTF path. |
-| **Path pattern** | `5:5` (5 learn, then 5 CTF, repeating), `1:1`, or custom like `E3,C1,E2,C2` (E = learn, C = CTF). |
-| **Release / Lock** | CTF tasks stay locked (and reveal nothing) until the instructor releases them. Changes reach students within seconds via the shared cloud bucket. |
+| **CTF Mode ON/OFF** | OFF: students only see the Learn tasks. ON: students see a locked 🚩 card beside each Learn task that has a CTF. |
+| **Release pattern** | `5:5`, `1:1`, or custom like `E3,C1,E2,C2` (E = Learn, C = CTF). The **C** numbers set the size of each release batch (5, 1, or 1 then 2...). The **E** numbers are a pacing hint. |
+| **Release / Lock** | Nothing opens by itself. Release the next batch, the next single challenge, or toggle any challenge. Locked tasks reveal nothing. Students see changes within seconds via the shared cloud bucket. |
 
-**Adding a CTF task:** copy an entry in `ctf_questions.js`, use the next id (101+), write the `output` with a `{{FLAG}}` placeholder, and generate `flagEnc` in the browser console with `ctfEncodeFlag("CEH{your_flag}")`.
+**Adding a CTF task:** copy an entry in `ctf_questions.js`, use the next id (101+), set `pairedWith` to the Learn task it practises, write the `output` with a `{{FLAG}}` placeholder, and generate `flagEnc` in the browser console with `ctfEncodeFlag("CEH{your_flag}")`.
 
 > Flags are obfuscated (XOR + base64), not encrypted, and release gating is a classroom pacing tool. Everything ships to the browser, so this is not a security boundary. Use a server-side check if you run a competitive event.
 

@@ -2766,3 +2766,112 @@ body.ctf-task #btnTrackerToggle {
   color: var(--text-muted);
   border-color: var(--border-color);
 }
+
+/* Side-by-side: Learn task card on the left, its CTF card(s) on the right */
+.sidebar-task-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+.sidebar-task-row > .sidebar-task-card {
+  flex: 1;
+  min-width: 0;
+}
+.sidebar-ctf-col {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex-shrink: 0;
+  width: 62px;
+}
+.sidebar-ctf-mini {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 3px 4px;
+  border-radius: 6px;
+  background: rgba(255, 107, 61, 0.07);
+  border: 1px solid rgba(255, 107, 61, 0.4);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.15;
+  min-height: 36px;
+}
+.sidebar-ctf-mini:hover {
+  background: rgba(255, 107, 61, 0.16);
+  transform: translateX(2px);
+}
+.sidebar-ctf-mini .mini-icon { font-size: 0.82rem; }
+.sidebar-ctf-mini .mini-label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  color: var(--ctf-accent);
+  letter-spacing: 0.3px;
+}
+.sidebar-ctf-mini .mini-sub {
+  font-size: 0.56rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.sidebar-ctf-mini.locked {
+  opacity: 0.6;
+  border-style: dashed;
+}
+.sidebar-ctf-mini.completed {
+  background: rgba(0, 230, 118, 0.1);
+  border-color: rgba(0, 230, 118, 0.5);
+}
+.sidebar-ctf-mini.completed .mini-label { color: var(--accent-green); }
+.sidebar-ctf-mini.live .mini-sub { color: var(--accent-green); }
+.sidebar-ctf-mini.notlive .mini-sub { color: var(--accent-yellow); }
+.sidebar-ctf-mini.active {
+  background: rgba(255, 107, 61, 0.24) !important;
+  border-color: var(--ctf-accent) !important;
+  box-shadow: 0 0 12px rgba(255, 107, 61, 0.25);
+}
+
+/* Captured flag with copy button */
+.ctf-captured {
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(0, 230, 118, 0.08);
+  border: 1px solid rgba(0, 230, 118, 0.35);
+}
+.ctf-captured-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--accent-green);
+  letter-spacing: 0.4px;
+}
+.ctf-captured-flag {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  color: var(--accent-yellow);
+  word-break: break-all;
+  user-select: all;
+}
+.ctf-copy-btn {
+  padding: 4px 12px;
+  font-size: 0.76rem;
+  white-space: nowrap;
+}
+
+/* Tutor panel: batch rows */
+.ctf-batch-row td {
+  background: rgba(255, 107, 61, 0.06);
+  border-top: 1px solid rgba(255, 107, 61, 0.3);
+}
+.ctf-chip.ctf.done {
+  background: rgba(0, 230, 118, 0.12);
+  border-color: rgba(0, 230, 118, 0.5);
+  color: var(--accent-green);
+}
