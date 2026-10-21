@@ -49,10 +49,36 @@ function eduIndexes() {
   return out;
 }
 
+// Module a task is listed under. A CTF follows the Education lab it is paired with,
+// so the CTF tab mirrors the Education tab (a CTF with no pairing keeps its own module).
+function taskModule(q) {
+  if (isCtfTask(q) && q.pairedWith !== undefined) {
+    const lab = EDU_TASKS.find((t) => t.id === q.pairedWith);
+    if (lab) return lab.module;
+  }
+  return q.module;
+}
+
+// CTF task indexes in display order: by module, then by the position of the paired
+// Education lab, then by the optional `order` field, then by id. CTF numbers ("CTF 7") follow this order, not the file order.
+let _ctfOrderCache = null;
 function ctfIndexes() {
-  const out = [];
-  ALL_TASKS.forEach((q, i) => { if (isCtfTask(q)) out.push(i); });
-  return out;
+  if (!_ctfOrderCache) {
+    const edu = eduIndexes();
+    const labPosition = (q) => {
+      const pos = edu.findIndex((k) => ALL_TASKS[k].id === q.pairedWith);
+      return pos === -1 ? 9999 : pos;
+    };
+    const list = [];
+    ALL_TASKS.forEach((q, i) => { if (isCtfTask(q)) list.push(i); });
+    list.sort((a, b) => {
+      const qa = ALL_TASKS[a];
+      const qb = ALL_TASKS[b];
+      return taskModule(qa) - taskModule(qb) || labPosition(qa) - labPosition(qb) || (qa.order || 0) - (qb.order || 0) || qa.id - qb.id;
+    });
+    _ctfOrderCache = list;
+  }
+  return _ctfOrderCache.slice();
 }
 
 // Display number of an Education task: its position in the Education list (ids are only keys)
@@ -227,8 +253,8 @@ function showCtfToast(message) {
 // Layout (sidebar tabs) & navigation
 // --------------------------------------------------------
 function moduleGroups(indexes) {
-  const mods = Array.from(new Set(indexes.map((i) => ALL_TASKS[i].module))).sort((a, b) => a - b);
-  return mods.map((m) => ({ mod: m, items: indexes.filter((i) => ALL_TASKS[i].module === m) }));
+  const mods = Array.from(new Set(indexes.map((i) => taskModule(ALL_TASKS[i])))).sort((a, b) => a - b);
+  return mods.map((m) => ({ mod: m, items: indexes.filter((i) => taskModule(ALL_TASKS[i]) === m) }));
 }
 
 // Two lists, each grouped by module: Education tasks and CTF tasks

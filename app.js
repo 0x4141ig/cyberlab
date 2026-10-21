@@ -273,8 +273,8 @@ function loadQuestion(idx) {
   elExamTipText.innerText = q.cehExamTip;
 
   // Sync module filter chip if navigating across modules while filtered
-  if (currentFilter !== "all" && q.module.toString() !== currentFilter) {
-    currentFilter = q.module.toString();
+  if (currentFilter !== "all" && taskModule(q).toString() !== currentFilter) {
+    currentFilter = taskModule(q).toString();
     document.querySelectorAll(".filter-chip").forEach((chip) => {
       chip.classList.toggle("active", chip.getAttribute("data-module") === currentFilter);
     });

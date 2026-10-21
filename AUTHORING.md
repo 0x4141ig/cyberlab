@@ -100,6 +100,7 @@ Add with `CTF_QUESTIONS.push({ ... })`. A CTF never shows the command: the stude
 {
   id: 114, type: "ctf",         // CTF ids are 101 and up
   pairedWith: 52,               // id of the lab it practises (every lab needs one)
+  order: 1,                     // optional: position among the CTFs of that lab (default: by id)
   module: 1, moduleTitle: "CTF · Introduction to Ethical Hacking",
   title: "...", difficulty: "Beginner", points: 150,
   target: "10.10.1.30 (Linux Server)", prompt: "root@parrot:~#",
@@ -115,6 +116,8 @@ Add with `CTF_QUESTIONS.push({ ... })`. A CTF never shows the command: the stude
   writeup: "..."                // shown after solving: which command and why
 }
 ```
+
+The CTF tab mirrors the Education tab: a CTF is listed under the module of the lab it is paired with, ordered by that lab's position (then `order`, then id), and numbered in that order.
 
 Design guidelines:
 

@@ -10,6 +10,7 @@
 //   * module        -> 1..5 (topic module, used by the sidebar filter chips)
 //   * pairedWith    -> optional id of the Education task this CTF practises; shown as
 //                      "Related: Task N" on the CTF card once the challenge is open
+//   * order         -> optional number: position among the CTFs of the same lab (default: by id)
 //   * accepted      -> RegExp, string, or function(cmd) => boolean
 //   * output        -> terminal output; put {{FLAG}} where the flag should appear
 //   * outputVariants-> optional [{ test: RegExp|fn, output }] for alternate tools
@@ -197,7 +198,7 @@ Set-Cookie: PHPSESSID=7f3k2n9d8q1c; path=/; HttpOnly`,
   {
     id: 104,
     type: "ctf",
-    pairedWith: 37,
+    pairedWith: 6,
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Please Do Not Crawl",
@@ -295,6 +296,7 @@ Sitemap: http://10.10.1.22/sitemap.xml`,
     id: 106,
     type: "ctf",
     pairedWith: 7,
+    order: 4,   // position among the CTFs of its lab
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "Odd Service in the Version Column",
@@ -342,6 +344,7 @@ Nmap done: 1 IP address (1 host up) scanned in 14.52 seconds`,
     id: 107,
     type: "ctf",
     pairedWith: 7,
+    order: 5,   // position among the CTFs of its lab
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "What Is the Page Called?",
@@ -392,8 +395,9 @@ Nmap done: 1 IP address (1 host up) scanned in 6.31 seconds`,
     id: 108,
     type: "ctf",
     pairedWith: 7,
-    module: 4,
-    moduleTitle: "CTF · Enumeration",
+    order: 6,   // position among the CTFs of its lab
+    module: 3,
+    moduleTitle: "CTF · Scanning Networks",
     title: "Mail Server Greeting",
     difficulty: "Beginner",
     points: 150,
@@ -434,8 +438,9 @@ Nmap done: 1 IP address (1 host up) scanned in 1.12 seconds`,
     id: 109,
     type: "ctf",
     pairedWith: 7,
-    module: 4,
-    moduleTitle: "CTF · Enumeration",
+    order: 7,   // position among the CTFs of its lab
+    module: 3,
+    moduleTitle: "CTF · Scanning Networks",
     title: "The Share Nobody Remembered",
     difficulty: "Beginner",
     points: 150,

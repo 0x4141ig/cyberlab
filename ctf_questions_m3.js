@@ -9,6 +9,7 @@ CTF_QUESTIONS.push(
     type: "ctf",
     derivedFlag: true,
     pairedWith: 7,
+    order: 1,   // position among the CTFs of its lab
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "Head Count",
@@ -55,6 +56,7 @@ Nmap done: 256 IP addresses (6 hosts up) scanned in 2.64 seconds`,
     id: 131,
     type: "ctf",
     pairedWith: 7,
+    order: 3,   // position among the CTFs of its lab
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "The Port Nobody Scans",
@@ -100,6 +102,7 @@ Nmap done: 1 IP address (1 host up) scanned in 21.37 seconds`,
     id: 132,
     type: "ctf",
     pairedWith: 7,
+    order: 2,   // position among the CTFs of its lab
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "Silent Service",
