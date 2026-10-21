@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>CEH v13 Interactive Lab Walkthrough (Modules 1 - 5) | NetAcad & CTF</title>
-  <link rel="stylesheet" href="style.css?v=20261021_v16">
+  <link rel="stylesheet" href="style.css?v=20261021_v18">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;600;700&display=swap" rel="stylesheet">
@@ -170,6 +170,10 @@
           </div>
           <span class="sidebar-total-badge" id="sidebarTotalBadge">38 Labs</span>
         </div>
+        <div class="sidebar-tabs" role="tablist">
+          <button type="button" class="sidebar-tab active" id="sidebarTabEdu" role="tab" onclick="setSidebarTab('edu')">📘 Education <span class="sidebar-tab-count" id="sidebarTabEduCount">0/38</span></button>
+          <button type="button" class="sidebar-tab ctf" id="sidebarTabCtf" role="tab" onclick="setSidebarTab('ctf')">🚩 CTF <span class="sidebar-tab-count" id="sidebarTabCtfCount">0/10</span></button>
+        </div>
         <div class="sidebar-search-box">
           <input type="text" id="sidebarSearch" placeholder="🔍 Search tasks..." oninput="filterSidebarTasks()" autocomplete="off" />
         </div>
@@ -271,7 +275,7 @@
         <div id="ctfLockedCard" class="ctf-locked-card" style="display: none;">
           <div class="ctf-locked-icon">🔒</div>
           <h3>This CTF challenge is locked</h3>
-          <p>Your instructor will release it when the class is ready. Finish the Learn tasks in the meantime. This page updates automatically.</p>
+          <p>Your instructor will open it when the class is ready. Keep working on the Education tasks in the meantime. This page updates automatically.</p>
         </div>
 
         <!-- CTF Mode: Flag Submission Card -->
@@ -619,7 +623,7 @@
           </div>
         </div>
 
-        <!-- Tab: CTF Control (mode, learn/CTF pattern, release locks). Rendered by ctf.js -->
+        <!-- Tab: CTF Control (open/close challenges one by one or in bulk). Rendered by ctf.js -->
         <div id="adminTabContentCtf" style="display: none;"></div>
 
         <!-- Tab 3: Actions & CSV Export -->
@@ -708,9 +712,9 @@
     </div>
   </div>
 
-  <script src="questions.js?v=20261021_v16"></script>
-  <script src="ctf_questions.js?v=20261021_v16"></script>
-  <script src="ctf.js?v=20261021_v16"></script>
-  <script src="app.js?v=20261021_v16"></script>
+  <script src="questions.js?v=20261021_v18"></script>
+  <script src="ctf_questions.js?v=20261021_v18"></script>
+  <script src="ctf.js?v=20261021_v18"></script>
+  <script src="app.js?v=20261021_v18"></script>
 </body>
 </html>

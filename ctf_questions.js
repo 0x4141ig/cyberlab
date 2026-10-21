@@ -8,8 +8,8 @@
 // Authoring a new CTF task:
 //   * id            -> unique, 101 and up (Education tasks use 1..38)
 //   * module        -> 1..5 (topic module, used by the sidebar filter chips)
-//   * pairedWith    -> id of the Education task this CTF practises; it appears beside
-//                      that task in the sidebar (omit to list it at the end of its module)
+//   * pairedWith    -> optional id of the Education task this CTF practises; shown as
+//                      "Related: Task N" on the CTF card once the challenge is open
 //   * accepted      -> RegExp, string, or function(cmd) => boolean
 //   * output        -> terminal output; put {{FLAG}} where the flag should appear
 //   * outputVariants-> optional [{ test: RegExp|fn, output }] for alternate tools
@@ -43,7 +43,7 @@ const CTF_QUESTIONS = [
   {
     id: 101,
     type: "ctf",
-    pairedWith: 4,   // shown beside Education task 4 in the sidebar
+    pairedWith: 4,   // practises Education task 4
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "The Note in the DNS",
@@ -107,7 +107,7 @@ Authoritative answers can be found from:`
   {
     id: 102,
     type: "ctf",
-    pairedWith: 5,   // shown beside Education task 5 in the sidebar
+    pairedWith: 5,   // practises Education task 5
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Everything the DNS Server Knows",
@@ -154,7 +154,7 @@ ctf-corp.local.            3600  IN  SOA  ns1.ctf-corp.local. admin.ctf-corp.loc
   {
     id: 103,
     type: "ctf",
-    pairedWith: 6,   // shown beside Education task 6 in the sidebar
+    pairedWith: 6,   // practises Education task 6
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Chatty Web Server",
@@ -195,7 +195,7 @@ Set-Cookie: PHPSESSID=7f3k2n9d8q1c; path=/; HttpOnly`,
   {
     id: 104,
     type: "ctf",
-    pairedWith: 37,   // shown beside Education task 37 in the sidebar
+    pairedWith: 37,   // practises Education task 37
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Please Do Not Crawl",
@@ -233,7 +233,7 @@ Sitemap: http://10.10.1.22/sitemap.xml`,
   {
     id: 105,
     type: "ctf",
-    pairedWith: 6,   // shown beside Education task 6 in the sidebar
+    pairedWith: 6,   // practises Education task 6
     module: 2,
     moduleTitle: "CTF · Footprinting & Reconnaissance",
     title: "Read the Fine Print",
@@ -292,7 +292,7 @@ Sitemap: http://10.10.1.22/sitemap.xml`,
   {
     id: 106,
     type: "ctf",
-    pairedWith: 10,   // shown beside Education task 10 in the sidebar
+    pairedWith: 10,   // practises Education task 10
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "Odd Service in the Version Column",
@@ -339,7 +339,7 @@ Nmap done: 1 IP address (1 host up) scanned in 14.52 seconds`,
   {
     id: 107,
     type: "ctf",
-    pairedWith: 12,   // shown beside Education task 12 in the sidebar
+    pairedWith: 12,   // practises Education task 12
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "What Is the Page Called?",
@@ -389,7 +389,7 @@ Nmap done: 1 IP address (1 host up) scanned in 6.31 seconds`,
   {
     id: 108,
     type: "ctf",
-    pairedWith: 30,   // shown beside Education task 30 in the sidebar
+    pairedWith: 30,   // practises Education task 30
     module: 4,
     moduleTitle: "CTF · Enumeration",
     title: "Mail Server Greeting",
@@ -431,7 +431,7 @@ Nmap done: 1 IP address (1 host up) scanned in 1.12 seconds`,
   {
     id: 109,
     type: "ctf",
-    pairedWith: 32,   // shown beside Education task 32 in the sidebar
+    pairedWith: 32,   // practises Education task 32
     module: 4,
     moduleTitle: "CTF · Enumeration",
     title: "The Share Nobody Remembered",
@@ -492,7 +492,7 @@ Nmap done: 1 IP address (1 host up) scanned in 3.84 seconds`,
   {
     id: 110,
     type: "ctf",
-    pairedWith: 20,   // shown beside Education task 20 in the sidebar
+    pairedWith: 20,   // practises Education task 20
     module: 4,
     moduleTitle: "CTF · Enumeration",
     title: "The Community Is Public",

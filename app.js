@@ -227,9 +227,13 @@ function loadQuestion(idx) {
   ctfLockedShown = locked;
   setCtfPaneState(isCtf, locked);
 
-  elQuestionIndicator.innerText = locked
-    ? "🔒 CTF locked"
-    : `Task ${layout.navPath.indexOf(idx) + 1} of ${layout.navPath.length}`;
+  // Keep the sidebar tab on the list the task belongs to
+  sidebarTab = isCtf ? "ctf" : "edu";
+  syncSidebarTabUI();
+
+  elQuestionIndicator.innerText = isCtf
+    ? (locked ? "🔒 CTF locked" : `CTF ${ctfNumber(q)} of ${layout.ctf.path.length}`)
+    : `Task ${layout.edu.path.indexOf(idx) + 1} of ${layout.edu.path.length}`;
   elPointsPill.innerText = `+${q.points || 100} PTS`;
 
   // Terminal Prompt
@@ -332,7 +336,7 @@ function loadQuestion(idx) {
   renderQuestionGrid();
 }
 
-// Previous / Next follow the user's task path (module order, or the learn/CTF pattern)
+// Previous / Next move within the current list (Education or CTF), skipping locked CTF tasks
 function updateNavButtons() {
   elBtnPrev.disabled = navTarget(-1) === -1;
   elBtnNext.disabled = navTarget(1) === -1;
@@ -362,10 +366,11 @@ function buildSidebarCard(idx, solvedList) {
   if (locked) {
     meta = `<span>Waiting for your instructor</span>`;
   } else if (isCtf) {
+    const related = ALL_TASKS.find((t) => t.id === q.pairedWith && !isCtfTask(t));
     const status = currentUser && currentUser.role === "admin"
-      ? `<span style="opacity:0.8;">${isCtfLive(q) ? "LIVE" : "NOT RELEASED"}</span>`
-      : `<span style="opacity:0.8;">CTF</span>`;
-    meta = `<span>+${q.points || 150} pts</span><span>•</span>${status}`;
+      ? (isCtfLive(q) ? "OPEN" : "CLOSED")
+      : (related ? `Related: Task ${related.id}` : "CTF");
+    meta = `<span>+${q.points || 150} pts</span><span>•</span><span style="opacity:0.8;">${status}</span>`;
   } else {
     meta = `
       <span>+${q.points || 100} pts</span>
@@ -385,25 +390,6 @@ function buildSidebarCard(idx, solvedList) {
   return card;
 }
 
-// Compact CTF card that sits beside the Learn task it practises
-function buildCtfMiniCard(idx, solvedList) {
-  const q = ALL_TASKS[idx];
-  const locked = isTaskLocked(q, currentUser);
-  const isSolved = solvedList.includes(q.id);
-  const isAdmin = Boolean(currentUser && currentUser.role === "admin");
-
-  const mini = document.createElement("div");
-  mini.className = `sidebar-ctf-mini ${idx === currentIndex ? "active" : ""} ${isSolved ? "completed" : ""} ${locked ? "locked" : ""} ${isAdmin ? (isCtfLive(q) ? "live" : "notlive") : ""}`;
-  mini.id = `sidebarTask_${idx}`;
-  mini.title = locked ? `CTF ${ctfNumber(q)} (locked)` : `CTF ${ctfNumber(q)}: ${q.title}`;
-  mini.onclick = () => loadQuestion(idx);
-
-  const icon = isSolved ? "✓" : (locked ? "🔒" : "🚩");
-  const sub = isAdmin ? (isCtfLive(q) ? "LIVE" : "OFF") : (locked ? "Locked" : `+${q.points || 150}`);
-  mini.innerHTML = `<span class="mini-icon">${icon}</span><span class="mini-label">CTF ${ctfNumber(q)}</span><span class="mini-sub">${sub}</span>`;
-  return mini;
-}
-
 function renderQuestionGrid() {
   if (!elQuestionGrid) return;
   elQuestionGrid.innerHTML = "";
@@ -420,23 +406,31 @@ function renderQuestionGrid() {
   const searchTerm = (searchInput ? searchInput.value : "").toLowerCase().trim();
 
   const layout = buildTaskLayout(currentUser);
-  const viewTotal = layout.path.length;
+  const tab = sidebarTab === "ctf" ? layout.ctf : layout.edu;
   const solvedList = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved : [];
+  const countSolved = (list) => list.filter((i) => solvedList.includes(ALL_TASKS[i].id)).length;
+
+  // Tab labels (solved / total per list)
+  syncSidebarTabUI();
+  const eduCount = document.getElementById("sidebarTabEduCount");
+  const ctfCount = document.getElementById("sidebarTabCtfCount");
+  if (eduCount) eduCount.innerText = `${countSolved(layout.edu.path)}/${layout.edu.path.length}`;
+  if (ctfCount) ctfCount.innerText = `${countSolved(layout.ctf.path)}/${layout.ctf.path.length}`;
 
   // Update total badges
   const totalBadge = document.getElementById("sidebarTotalBadge");
-  if (totalBadge) totalBadge.innerText = `${viewTotal} Labs`;
+  if (totalBadge) totalBadge.innerText = `${tab.path.length} ${sidebarTab === "ctf" ? "CTFs" : "Labs"}`;
   const chipAll = document.querySelector('.filter-chip[data-module="all"]');
-  if (chipAll) chipAll.innerText = `All (${viewTotal})`;
+  if (chipAll) chipAll.innerText = `All (${tab.path.length})`;
   const navBadge = document.querySelector(".btn-modules .header-count-badge");
-  if (navBadge) navBadge.innerText = viewTotal;
+  if (navBadge) navBadge.innerText = layout.path.length;
 
-  // Update sidebar progress bar
-  const solvedCount = layout.path.filter((i) => solvedList.includes(ALL_TASKS[i].id)).length;
-  const pct = Math.round((solvedCount / (viewTotal || 1)) * 100);
+  // Update sidebar progress bar (for the tab being shown)
+  const solvedCount = countSolved(tab.path);
+  const pct = Math.round((solvedCount / (tab.path.length || 1)) * 100);
   const elSidebarPct = document.getElementById("sidebarProgressPct");
   const elSidebarFill = document.getElementById("sidebarProgressFill");
-  if (elSidebarPct) elSidebarPct.innerText = `${solvedCount} / ${viewTotal} (${pct}%)`;
+  if (elSidebarPct) elSidebarPct.innerText = `${solvedCount} / ${tab.path.length} (${pct}%)`;
   if (elSidebarFill) elSidebarFill.style.width = `${pct}%`;
 
   const matchesSearch = (q, locked) => {
@@ -445,50 +439,30 @@ function renderQuestionGrid() {
     return q.title.toLowerCase().includes(searchTerm) || q.task.toLowerCase().includes(searchTerm) || q.id.toString() === searchTerm;
   };
 
-  layout.groups.forEach(group => {
+  tab.groups.forEach(group => {
     if (currentFilter !== "all" && group.mod.toString() !== currentFilter) return;
 
-    // A row shows when its Learn task matches, or when one of its CTF twins matches the search
-    const rows = group.rows.filter((row) => {
-      const ids = [row.idx, ...row.twins];
-      return ids.some((i) => matchesSearch(ALL_TASKS[i], isTaskLocked(ALL_TASKS[i], currentUser)));
+    const items = group.items.filter((idx) => {
+      const q = ALL_TASKS[idx];
+      return matchesSearch(q, isTaskLocked(q, currentUser));
     });
 
-    if (rows.length === 0) return;
+    if (items.length === 0) return;
 
     const groupEl = document.createElement("div");
     groupEl.className = "sidebar-module-group";
 
-    const groupIdx = rows.flatMap((row) => [row.idx, ...row.twins]);
-    const solvedInGroup = groupIdx.filter((i) => solvedList.includes(ALL_TASKS[i].id)).length;
-
+    const solvedInGroup = countSolved(items);
     const mod = modules.find((m) => m.id === group.mod) || { id: group.mod, name: "Module " + group.mod };
     const header = document.createElement("div");
     header.className = `sidebar-module-header mod-${mod.id}`;
     header.innerHTML = `
       <span>Mod 0${mod.id}: ${mod.name}</span>
-      <span class="sidebar-module-stat">${solvedInGroup}/${groupIdx.length}</span>
+      <span class="sidebar-module-stat">${solvedInGroup}/${items.length}</span>
     `;
     groupEl.appendChild(header);
 
-    rows.forEach((row) => {
-      const card = buildSidebarCard(row.idx, solvedList);
-      if (!row.twins.length) {
-        groupEl.appendChild(card);
-        return;
-      }
-
-      // Learn task on the left, its CTF challenge(s) on the right
-      const rowEl = document.createElement("div");
-      rowEl.className = "sidebar-task-row";
-      rowEl.appendChild(card);
-      const col = document.createElement("div");
-      col.className = "sidebar-ctf-col";
-      row.twins.forEach((ci) => col.appendChild(buildCtfMiniCard(ci, solvedList)));
-      rowEl.appendChild(col);
-      groupEl.appendChild(rowEl);
-    });
-
+    items.forEach((idx) => groupEl.appendChild(buildSidebarCard(idx, solvedList)));
     elQuestionGrid.appendChild(groupEl);
   });
 
@@ -496,7 +470,7 @@ function renderQuestionGrid() {
     const empty = document.createElement("div");
     empty.className = "sidebar-empty-state";
     empty.style.cssText = "padding:18px 12px; text-align:center; color:var(--text-muted); font-size:0.82rem;";
-    empty.innerText = "No tasks match your search.";
+    empty.innerText = searchTerm ? "No tasks match your search." : "No tasks in this module.";
     elQuestionGrid.appendChild(empty);
   }
 
@@ -614,18 +588,14 @@ function updateAuthUI() {
 
 // Progress Bar
 function updateProgress() {
-  const path = buildTaskLayout(currentUser).path;
+  // Header progress covers the Education tasks; CTF progress shows on the sidebar CTF tab
+  const eduPath = buildTaskLayout(currentUser).edu.path;
   const solvedList = (currentUser && Array.isArray(currentUser.solved)) ? currentUser.solved : [];
-  const total = path.length;
-  const done = path.filter((i) => solvedList.includes(ALL_TASKS[i].id)).length;
+  const total = eduPath.length;
+  const done = eduPath.filter((i) => solvedList.includes(ALL_TASKS[i].id)).length;
   const pct = Math.round((done / (total || 1)) * 100);
   if (elProgressBarFill) elProgressBarFill.style.width = `${pct}%`;
   if (elProgressText) elProgressText.innerText = `${done} / ${total} (${pct}%)`;
-
-  const elSidebarPct = document.getElementById("sidebarProgressPct");
-  const elSidebarFill = document.getElementById("sidebarProgressFill");
-  if (elSidebarPct) elSidebarPct.innerText = `${done} / ${total} (${pct}%)`;
-  if (elSidebarFill) elSidebarFill.style.width = `${pct}%`;
 }
 
 // Evaluate Command
@@ -1020,9 +990,10 @@ function setModuleFilter(mod) {
     }
   });
 
-  if (mod !== "all") {
-    const targetIdx = CEH_QUESTIONS.findIndex((q) => q.module.toString() === mod);
-    if (targetIdx !== -1) {
+  // Education chips jump to the module's first task; on the CTF tab they only filter the list
+  if (mod !== "all" && sidebarTab !== "ctf") {
+    const targetIdx = eduIndexes().find((i) => ALL_TASKS[i].module.toString() === mod);
+    if (targetIdx !== undefined) {
       loadQuestion(targetIdx);
       return;
     }
@@ -2496,8 +2467,8 @@ function renderAdminMatrix(students) {
   const matrixBody = document.getElementById("adminMatrixBody");
   if (!headerTr || !matrixBody) return;
 
-  // Columns: Education tasks, plus CTF tasks while CTF mode is on
-  const matrixTasks = ctfConfig.enabled ? ALL_TASKS : CEH_QUESTIONS;
+  // Columns: Education tasks, then CTF tasks
+  const matrixTasks = ALL_TASKS;
   const colLabel = (t) => (isCtfTask(t) ? `🚩${ctfNumber(t)}` : `Q${t.id}`);
 
   let hHtml = `<th style="position: sticky; left: 0; background: var(--bg-card); z-index: 2; min-width: 120px;">Student</th>`;

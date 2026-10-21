@@ -1,20 +1,19 @@
 // ============================================================================
-// CTF MODE ENGINE
+// CTF ENGINE
 // ----------------------------------------------------------------------------
 // Loaded after questions.js + ctf_questions.js and before app.js.
 //
 //  * ALL_TASKS        -> Education tasks (CEH_QUESTIONS) followed by CTF tasks.
 //                        Indexes into this array are what app.js calls "currentIndex".
-//  * ctfConfig        -> Tutor-controlled class settings, shared with students via
-//                        the cloud bucket:  { enabled, pattern, released[], updatedAt }
-//  * Pairing          -> Each CTF task has pairedWith: <education task id>. In the sidebar
-//                        the CTF card sits beside the Learn task it practises.
-//  * Patterns         -> "5:5", "1:1", or custom "E3,C1,E2,C2" (E = learn, C = CTF).
-//                        The C counts set how many CTF tasks one release batch opens;
-//                        the E counts are pacing guidance (Learn tasks to cover first).
-//  * Locks            -> A CTF task is invisible to students while CTF mode is off,
-//                        and shows a lock card until the tutor releases it. The tutor
-//                        opens CTF tasks batch by batch (or one at a time), never forced.
+//  * Sidebar tabs     -> "📘 Education" and "🚩 CTF" (sidebarTab). Both are grouped by module.
+//  * ctfConfig        -> Tutor-controlled, shared with students via the cloud bucket:
+//                        { released: [ids of the CTF tasks that are open], updatedAt }
+//  * Locks            -> Students always see the CTF tab, but every CTF task shows a lock
+//                        card and reveals nothing until the tutor opens it. The tutor can
+//                        open or close any task at any time, one by one or several at once
+//                        (Admin > 🚩 CTF Control).
+//  * pairedWith       -> Optional id of the Education task a CTF practises (shown as
+//                        "Related: Task N" once the CTF is open).
 //
 // Note: gating is a classroom pacing tool, not a security boundary. All task data
 // ships to the browser, and flags are only obfuscated.
@@ -26,11 +25,11 @@ const CTF_LOCAL_KEY = "ceh_ctf_config";
 const CTF_FLAG_KEY = "ceh-ctf-v13";
 const CTF_HINT_COSTS = [10, 20, 40];
 const CTF_SYNC_INTERVAL_MS = 8000;
-const CTF_DEFAULT_PATTERN = "5:5";
 
 let ctfConfig = loadLocalCtfConfig();
 let ctfLockedShown = false;     // lock state of the task currently rendered (set by loadQuestion)
 let ctfSyncTimer = null;
+let sidebarTab = "edu";           // which sidebar tab is showing: "edu" or "ctf"
 const ctfAdminHintTier = {};    // in-memory hint tiers for the tutor (no penalties apply)
 
 // --------------------------------------------------------
@@ -64,17 +63,10 @@ function taskIndexById(id) {
   return ALL_TASKS.findIndex((q) => q.id === Number(id));
 }
 
-// Number of tasks a student can see right now (denominator for progress displays)
+// Denominator for solved counts in the leaderboard / admin views:
+// every Education task plus the CTF tasks the tutor has opened
 function taskTotal() {
-  return ctfConfig.enabled ? ALL_TASKS.length : CEH_QUESTIONS.length;
-}
-
-// Solved ids that count toward the current view (CTF solves only count while CTF mode is on)
-function scopedSolvedCount(solvedList) {
-  const list = Array.isArray(solvedList) ? solvedList : [];
-  if (ctfConfig.enabled) return list.length;
-  const eduIds = new Set(CEH_QUESTIONS.map((q) => q.id));
-  return list.filter((id) => eduIds.has(id)).length;
+  return CEH_QUESTIONS.length + ctfIndexes().filter((i) => isCtfLive(ALL_TASKS[i])).length;
 }
 
 // --------------------------------------------------------
@@ -129,12 +121,11 @@ function matchesAcceptedRule(rule, cmd) {
 // Config storage & cloud sync
 // --------------------------------------------------------
 function normalizeCtfConfig(raw) {
-  const cfg = Object.assign({}, { enabled: false, pattern: CTF_DEFAULT_PATTERN, released: [], updatedAt: 0 }, raw || {});
-  cfg.enabled = Boolean(cfg.enabled);
-  cfg.pattern = String(cfg.pattern || CTF_DEFAULT_PATTERN);
-  cfg.released = Array.isArray(cfg.released) ? cfg.released.map(Number).filter((n) => Number.isFinite(n)) : [];
-  cfg.updatedAt = Number(cfg.updatedAt) || 0;
-  return cfg;
+  const src = raw || {};
+  return {
+    released: Array.isArray(src.released) ? src.released.map(Number).filter((n) => Number.isFinite(n)) : [],
+    updatedAt: Number(src.updatedAt) || 0
+  };
 }
 
 function loadLocalCtfConfig() {
@@ -188,9 +179,8 @@ async function pollCtfConfig() {
   ctfConfig = remote;
   saveLocalCtfConfig(ctfConfig);
 
-  const newlyReleased = remote.released.filter((id) => !before.released.includes(id));
-  const justEnabled = remote.enabled && !before.enabled;
-  onCtfConfigChanged(true, (justEnabled || newlyReleased.length > 0) && currentUser.role !== "admin");
+  const newlyOpened = remote.released.filter((id) => !before.released.includes(id));
+  onCtfConfigChanged(true, newlyOpened.length > 0 && currentUser.role !== "admin");
 }
 
 function startCtfSync() {
@@ -216,7 +206,7 @@ function onCtfConfigChanged(fromRemote, announce) {
 
   const adminModal = document.getElementById("adminPortalModal");
   if (adminModal && adminModal.style.display !== "none") renderAdminCtfPanel();
-  if (announce) showCtfToast("🚩 New CTF content is available! Check the sidebar.");
+  if (announce) showCtfToast("🚩 A new CTF challenge is open! Check the CTF tab.");
 }
 
 function showCtfToast(message) {
@@ -229,98 +219,49 @@ function showCtfToast(message) {
 }
 
 // --------------------------------------------------------
-// Patterns, path & layout
+// Layout (sidebar tabs) & navigation
 // --------------------------------------------------------
-function parseCtfPattern(str) {
-  const fallback = [{ type: "edu", n: 5 }, { type: "ctf", n: 5 }];
-  const s = String(str || "").trim().toUpperCase().replace(/\s+/g, "");
-  const MAX = 50;
-
-  const pair = s.match(/^(\d+):(\d+)$/);
-  if (pair) {
-    const a = Number(pair[1]);
-    const b = Number(pair[2]);
-    if (a < 1 || b < 1 || a > MAX || b > MAX) return { blocks: fallback, error: `Each number must be between 1 and ${MAX}.` };
-    return { blocks: [{ type: "edu", n: a }, { type: "ctf", n: b }], error: null };
-  }
-
-  if (/^([EC]\d+)(,[EC]\d+)*$/.test(s)) {
-    const blocks = s.split(",").map((t) => ({ type: t[0] === "C" ? "ctf" : "edu", n: Number(t.slice(1)) }));
-    if (blocks.some((b) => b.n < 1 || b.n > MAX)) return { blocks: fallback, error: `Each count must be between 1 and ${MAX}.` };
-    if (!blocks.some((b) => b.type === "ctf")) return { blocks: fallback, error: "The pattern needs at least one C (CTF) entry, e.g. E3,C1." };
-    return { blocks, error: null };
-  }
-
-  return { blocks: fallback, error: "Use 5:5, 1:1, or a custom list like E3,C1,E2,C2 (E = learn, C = CTF)." };
+function moduleGroups(indexes) {
+  const mods = Array.from(new Set(indexes.map((i) => ALL_TASKS[i].module))).sort((a, b) => a - b);
+  return mods.map((m) => ({ mod: m, items: indexes.filter((i) => ALL_TASKS[i].module === m) }));
 }
 
-// Release batches: the CTF tasks grouped by the "C" counts of the pattern (cycling).
-//   5:5 -> batches of 5      1:1 -> batches of 1      E3,C1,E2,C2 -> batches of 1, 2, 1, 2...
-// Each batch also records how many Learn tasks the pattern suggests covering first.
-function buildCtfBatches(pattern) {
-  const tokens = parseCtfPattern(pattern).blocks;
-  const queue = ctfIndexes();
-  const batches = [];
-  let learn = 0;
-  let guard = 0;
-  while (queue.length && guard++ < 1000) {
-    for (const t of tokens) {
-      if (t.type === "edu") { learn += t.n; continue; }
-      if (!queue.length) break;
-      batches.push({ learn, items: queue.splice(0, t.n) });
-      learn = 0;
-    }
-  }
-  return batches;
-}
-
-// CTF task indexes paired with the given Education task id
-function ctfTwinsOf(eduId) {
-  return ctfIndexes().filter((i) => ALL_TASKS[i].pairedWith === eduId);
-}
-
-// What the given user sees.
-//   groups  -> sidebar module groups; each row is { idx, twins: [ctf indexes shown beside it] }
-//   path    -> every visible task in order (a Learn task, then its CTF twins)
-//   navPath -> path without the CTF tasks that are still locked (used by Previous / Next)
+// Two lists, each grouped by module: Education tasks and CTF tasks
 function buildTaskLayout(user) {
-  const isAdmin = Boolean(user && user.role === "admin");
-  const showCtf = isAdmin || ctfConfig.enabled;
-
-  const eduList = eduIndexes();
-  const eduIds = new Set(eduList.map((i) => ALL_TASKS[i].id));
-  const orphans = ctfIndexes().filter((i) => !eduIds.has(ALL_TASKS[i].pairedWith));
-
-  const mods = new Set(eduList.map((i) => ALL_TASKS[i].module));
-  if (showCtf) orphans.forEach((i) => mods.add(ALL_TASKS[i].module));
-
-  const groups = Array.from(mods).sort((a, b) => a - b).map((m) => {
-    const rows = eduList
-      .filter((i) => ALL_TASKS[i].module === m)
-      .map((i) => ({ idx: i, twins: showCtf ? ctfTwinsOf(ALL_TASKS[i].id) : [] }));
-    if (showCtf) {
-      orphans.filter((i) => ALL_TASKS[i].module === m).forEach((i) => rows.push({ idx: i, twins: [] }));
-    }
-    return { kind: "module", mod: m, rows };
-  });
-
-  const path = groups.flatMap((g) => g.rows.flatMap((r) => [r.idx, ...r.twins]));
-  const navPath = path.filter((i) => !isTaskLocked(ALL_TASKS[i], user));
-  return { path, navPath, groups };
+  const edu = eduIndexes();
+  const ctf = ctfIndexes();
+  return {
+    path: edu.concat(ctf),
+    edu: { path: edu, groups: moduleGroups(edu) },
+    ctf: { path: ctf, groups: moduleGroups(ctf) }
+  };
 }
 
-// Next (dir = 1) / previous (dir = -1) task the user can open from the current one; -1 if none
+// Next (dir = 1) / previous (dir = -1) task in the same list (Education or CTF)
+// that the user can open; -1 if there is none
 function navTarget(dir) {
-  const layout = buildTaskLayout(currentUser);
-  const open = new Set(layout.navPath);
-  for (let p = layout.path.indexOf(currentIndex) + dir; p >= 0 && p < layout.path.length; p += dir) {
-    if (open.has(layout.path[p])) return layout.path[p];
+  const list = isCtfTask(ALL_TASKS[currentIndex]) ? ctfIndexes() : eduIndexes();
+  for (let p = list.indexOf(currentIndex) + dir; p >= 0 && p < list.length; p += dir) {
+    if (!isTaskLocked(ALL_TASKS[list[p]], currentUser)) return list[p];
   }
   return -1;
 }
 
+function syncSidebarTabUI() {
+  const eduBtn = document.getElementById("sidebarTabEdu");
+  const ctfBtn = document.getElementById("sidebarTabCtf");
+  if (eduBtn) eduBtn.classList.toggle("active", sidebarTab === "edu");
+  if (ctfBtn) ctfBtn.classList.toggle("active", sidebarTab === "ctf");
+}
+
+function setSidebarTab(tab) {
+  sidebarTab = tab === "ctf" ? "ctf" : "edu";
+  syncSidebarTabUI();
+  renderQuestionGrid();
+}
+
 function isCtfLive(q) {
-  return Boolean(ctfConfig.enabled && ctfConfig.released.includes(q.id));
+  return ctfConfig.released.includes(q.id);
 }
 
 function isTaskLocked(q, user) {
@@ -529,157 +470,124 @@ function submitCtfFlag(e) {
 // --------------------------------------------------------
 // Tutor panel: "🚩 CTF Control" tab in the admin dashboard
 // --------------------------------------------------------
-function adminSetCtfEnabled(on) {
-  updateCtfConfig({ enabled: Boolean(on) });
-  renderAdminCtfPanel();
-}
+const adminCtfSelection = new Set();   // CTF task ids ticked in the tutor panel
 
-function adminApplyCtfPattern(value) {
-  const input = document.getElementById("ctfPatternInput");
-  const pattern = (value !== undefined ? value : (input ? input.value : "")).trim();
-  const parsed = parseCtfPattern(pattern);
-  if (parsed.error) {
-    const err = document.getElementById("ctfPatternError");
-    if (err) { err.innerText = parsed.error; err.style.display = "block"; }
-    return;
-  }
-  updateCtfConfig({ pattern: pattern.toUpperCase().replace(/\s+/g, "") });
+function adminSetCtfOpen(ids, open) {
+  const released = new Set(ctfConfig.released);
+  ids.forEach((id) => (open ? released.add(id) : released.delete(id)));
+  updateCtfConfig({ released: Array.from(released) });
   renderAdminCtfPanel();
 }
 
 function adminToggleCtfRelease(id) {
-  const released = new Set(ctfConfig.released);
-  if (released.has(id)) released.delete(id);
-  else released.add(id);
-  updateCtfConfig({ released: Array.from(released) });
+  adminSetCtfOpen([id], !ctfConfig.released.includes(id));
+}
+
+// Open / close every ticked challenge at once
+function adminSetSelectedCtf(open) {
+  const ids = Array.from(adminCtfSelection);
+  if (!ids.length) return;
+  adminCtfSelection.clear();
+  adminSetCtfOpen(ids, open);
+}
+
+function adminSetAllCtf(open) {
+  if (open && !confirm("Open ALL CTF challenges to the class at once?")) return;
+  adminCtfSelection.clear();
+  adminSetCtfOpen(ctfIndexes().map((i) => ALL_TASKS[i].id), open);
+}
+
+// Quick selections: all | none | closed | open
+function adminSelectCtf(mode) {
+  adminCtfSelection.clear();
+  ctfIndexes().map((i) => ALL_TASKS[i]).forEach((q) => {
+    const live = isCtfLive(q);
+    if (mode === "all" || (mode === "closed" && !live) || (mode === "open" && live)) adminCtfSelection.add(q.id);
+  });
   renderAdminCtfPanel();
 }
 
-function adminSetBatchRelease(batchNo, release) {
-  const batch = buildCtfBatches(ctfConfig.pattern)[batchNo - 1];
-  if (!batch) return;
-  const ids = batch.items.map((i) => ALL_TASKS[i].id);
-  const released = new Set(ctfConfig.released);
-  ids.forEach((id) => (release ? released.add(id) : released.delete(id)));
-  updateCtfConfig({ released: Array.from(released) });
-  renderAdminCtfPanel();
+function adminToggleCtfSelect(id, checked) {
+  if (checked) adminCtfSelection.add(id);
+  else adminCtfSelection.delete(id);
+  updateCtfSelectionUI();
 }
 
-// Open the next batch the pattern defines (finishes a partly opened batch first)
-function adminReleaseNextBatch() {
-  const batches = buildCtfBatches(ctfConfig.pattern);
-  const next = batches.findIndex((b) => b.items.some((i) => !ctfConfig.released.includes(ALL_TASKS[i].id)));
-  if (next !== -1) adminSetBatchRelease(next + 1, true);
+// Refresh the selection counter and bulk buttons without redrawing the table
+function updateCtfSelectionUI() {
+  const n = adminCtfSelection.size;
+  const total = ctfIndexes().length;
+  const openBtn = document.getElementById("ctfOpenSelected");
+  const closeBtn = document.getElementById("ctfCloseSelected");
+  const count = document.getElementById("ctfSelectedCount");
+  const master = document.getElementById("ctfSelectAllBox");
+  if (openBtn) { openBtn.disabled = n === 0; openBtn.innerText = `🔓 Open selected (${n})`; }
+  if (closeBtn) { closeBtn.disabled = n === 0; closeBtn.innerText = `🔒 Close selected (${n})`; }
+  if (count) count.innerText = n ? `${n} selected` : "Tick challenges to open or close several at once";
+  if (master) { master.checked = n > 0 && n === total; master.indeterminate = n > 0 && n < total; }
 }
 
-// Open just the next single CTF task
-function adminReleaseNextOne() {
-  const nextIdx = ctfIndexes().find((i) => !ctfConfig.released.includes(ALL_TASKS[i].id));
-  if (nextIdx === undefined) return;
-  updateCtfConfig({ released: ctfConfig.released.concat(ALL_TASKS[nextIdx].id) });
-  renderAdminCtfPanel();
-}
-
-function adminReleaseAllCtf() {
-  if (!confirm("Release ALL CTF challenges to the class at once?")) return;
-  updateCtfConfig({ released: ctfIndexes().map((i) => ALL_TASKS[i].id) });
-  renderAdminCtfPanel();
-}
-
-function adminLockAllCtf() {
-  updateCtfConfig({ released: [] });
-  renderAdminCtfPanel();
+function adminToggleAllCtfBoxes(checked) {
+  adminSelectCtf(checked ? "all" : "none");
 }
 
 function renderAdminCtfPanel() {
   const host = document.getElementById("adminTabContentCtf");
   if (!host) return;
 
-  if (!ctfIndexes().length) {
+  const ctfList = ctfIndexes().map((i) => ALL_TASKS[i]);
+  if (!ctfList.length) {
     host.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem;">No CTF tasks found. Add tasks to <code>ctf_questions.js</code>.</p>`;
     return;
   }
 
-  const parsed = parseCtfPattern(ctfConfig.pattern);
-  const batches = buildCtfBatches(ctfConfig.pattern);
+  // Forget ticks for tasks that no longer exist
+  Array.from(adminCtfSelection).forEach((id) => { if (!ctfList.some((q) => q.id === id)) adminCtfSelection.delete(id); });
+
   const students = Array.isArray(adminCachedStudents) ? adminCachedStudents : [];
-  const presets = ["5:5", "3:3", "2:2", "1:1"];
-  const isReleased = (i) => ctfConfig.released.includes(ALL_TASKS[i].id);
-  const nextBatchNo = batches.findIndex((b) => b.items.some((i) => !isReleased(i))) + 1;
-  const releasedCount = ctfConfig.released.filter((id) => ALL_TASKS.some((q) => q.id === id && isCtfTask(q))).length;
+  const openCount = ctfList.filter(isCtfLive).length;
 
-  const preview = batches.map((b, n) => {
-    const all = b.items.every(isReleased);
-    return `<span class="ctf-chip ctf ${all ? "done" : ""}">${b.learn ? `📘 ${b.learn} → ` : ""}🚩 ${b.items.length}</span>`;
-  }).join("");
-
-  const rows = batches.map((b, n) => {
-    const batchNo = n + 1;
-    const allOpen = b.items.every(isReleased);
-    const header = `
-      <tr class="ctf-batch-row">
-        <td colspan="4">
-          <strong style="color:var(--ctf-accent);">Batch ${batchNo}</strong>
-          <span style="color:var(--text-muted); font-size:0.74rem;">· ${b.items.length} challenge${b.items.length > 1 ? "s" : ""}${b.learn ? ` · suggested: cover ${b.learn} Learn task${b.learn > 1 ? "s" : ""} first` : ""}</span>
-        </td>
+  const rows = ctfList.map((q) => {
+    const live = isCtfLive(q);
+    const solvedBy = students.filter((st) => Array.isArray(st.solved) && st.solved.includes(q.id)).length;
+    const related = ALL_TASKS.find((t) => t.id === q.pairedWith && !isCtfTask(t));
+    return `
+      <tr class="ctf-row ${live ? "is-open" : ""}">
+        <td style="width:34px; text-align:center;"><input type="checkbox" class="ctf-check" ${adminCtfSelection.has(q.id) ? "checked" : ""} onchange="adminToggleCtfSelect(${q.id}, this.checked)" /></td>
+        <td style="font-weight:700; color:var(--text-muted);">🚩${ctfNumber(q)}</td>
+        <td><strong style="color:var(--text-main);">${escapeHtml(q.title)}</strong><div style="font-size:0.7rem; color:var(--text-muted);">${escapeHtml(q.moduleTitle)}</div></td>
+        <td style="font-size:0.76rem;">${related ? `Task ${related.id}: ${escapeHtml(related.title)}` : "-"}</td>
+        <td style="text-align:center;">${students.length ? `${solvedBy} / ${students.length}` : "-"}</td>
         <td style="text-align:center;">
-          <button class="ctf-release-btn ${allOpen ? "live" : "locked"}" onclick="adminSetBatchRelease(${batchNo}, ${!allOpen})">${allOpen ? "🔒 Lock batch" : "🔓 Release batch"}</button>
+          <button class="ctf-release-btn ${live ? "live" : "locked"}" onclick="adminToggleCtfRelease(${q.id})" title="${live ? "Click to close" : "Click to open"}">
+            ${live ? "🔓 Open" : "🔒 Closed"}
+          </button>
         </td>
       </tr>`;
-    const body = b.items.map((i) => {
-      const q = ALL_TASKS[i];
-      const live = isCtfLive(q);
-      const solvedBy = students.filter((st) => Array.isArray(st.solved) && st.solved.includes(q.id)).length;
-      const beside = ALL_TASKS.find((t) => t.id === q.pairedWith && !isCtfTask(t));
-      return `
-        <tr>
-          <td style="font-weight:700; color:var(--text-muted);">🚩${ctfNumber(q)}</td>
-          <td><strong style="color:var(--text-main);">${escapeHtml(q.title)}</strong><div style="font-size:0.7rem; color:var(--text-muted);">${escapeHtml(q.moduleTitle)}</div></td>
-          <td style="font-size:0.76rem;">${beside ? `Task ${beside.id}: ${escapeHtml(beside.title)}` : "-"}</td>
-          <td style="text-align:center;">${students.length ? `${solvedBy} / ${students.length}` : "-"}</td>
-          <td style="text-align:center;">
-            <button class="ctf-release-btn ${live ? "live" : "locked"}" onclick="adminToggleCtfRelease(${q.id})">
-              ${live ? "🔓 Released" : "🔒 Locked"}
-            </button>
-          </td>
-        </tr>`;
-    }).join("");
-    return header + body;
   }).join("");
 
   host.innerHTML = `
-    <div class="ctf-admin-grid">
-      <div class="ctf-admin-card">
-        <div class="ctf-admin-label">CTF Mode</div>
-        <div class="ctf-admin-status ${ctfConfig.enabled ? "on" : "off"}">${ctfConfig.enabled ? "● ON" : "○ OFF"}</div>
-        <p class="ctf-admin-help">${ctfConfig.enabled
-          ? "Students see a locked 🚩 card beside each Learn task that has a CTF. Nothing opens until you release it."
-          : "Students only see the Learn tasks. CTF challenges are hidden from them."}</p>
-        <button class="btn-header" onclick="adminSetCtfEnabled(${!ctfConfig.enabled})">${ctfConfig.enabled ? "Turn CTF Mode OFF" : "Turn CTF Mode ON"}</button>
-      </div>
-
-      <div class="ctf-admin-card">
-        <div class="ctf-admin-label">Release Pattern</div>
-        <div class="ctf-preset-row">
-          ${presets.map((p) => `<button class="ctf-preset ${p === ctfConfig.pattern ? "active" : ""}" onclick="adminApplyCtfPattern('${p}')">${p}</button>`).join("")}
+    <div class="ctf-admin-card" style="margin-bottom:14px;">
+      <div style="display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+        <div>
+          <div class="ctf-admin-label">CTF Challenges</div>
+          <div class="ctf-admin-status ${openCount ? "on" : "off"}">${openCount} of ${ctfList.length} open</div>
         </div>
-        <div class="ctf-pattern-row">
-          <input id="ctfPatternInput" class="form-input" value="${escapeHtml(ctfConfig.pattern)}" placeholder="5:5 or E3,C1,E2,C2" onkeydown="if(event.key==='Enter'){adminApplyCtfPattern();}" />
-          <button class="btn-header" onclick="adminApplyCtfPattern()">Apply</button>
+        <div class="ctf-release-actions">
+          <button class="btn-header" onclick="adminSetAllCtf(true)">🔓 Open all</button>
+          <button class="btn-header" onclick="adminSetAllCtf(false)">🔒 Close all</button>
         </div>
-        <div id="ctfPatternError" class="ctf-feedback error" style="display:${parsed.error ? "block" : "none"};">${escapeHtml(parsed.error || "")}</div>
-        <p class="ctf-admin-help">The <code>C</code> numbers are how many CTF challenges one <em>release batch</em> opens (<code>5:5</code> = 5, <code>1:1</code> = 1, <code>E3,C1,E2,C2</code> = 1 then 2...). The <code>E</code> numbers are a pacing hint. You still decide when each batch opens.</p>
-        <div class="ctf-preview">${preview}</div>
       </div>
+      <p class="ctf-admin-help">Students always see the <strong>🚩 CTF</strong> tab, but each challenge stays locked and reveals nothing until you open it. Open or close any challenge at any time with its button, or tick several and open or close them together.</p>
     </div>
 
-    <div class="ctf-release-bar">
-      <strong style="color:var(--text-main);">CTF Challenges <span style="color:var(--text-muted); font-weight:400; font-size:0.78rem;">· ${releasedCount} of ${ctfIndexes().length} released</span></strong>
+    <div class="ctf-bulk-bar">
+      <span id="ctfSelectedCount" class="ctf-admin-help" style="margin:0;"></span>
       <div class="ctf-release-actions">
-        <button class="btn-header" onclick="adminReleaseNextBatch()" ${nextBatchNo ? "" : "disabled"}>🔓 Release next batch${nextBatchNo ? ` (${nextBatchNo})` : ""}</button>
-        <button class="btn-header" onclick="adminReleaseNextOne()" ${nextBatchNo ? "" : "disabled"}>🔓 Release next 1</button>
-        <button class="btn-header" onclick="adminReleaseAllCtf()">🔓 Release all</button>
-        <button class="btn-header" onclick="adminLockAllCtf()">🔒 Lock all</button>
+        <button class="btn-header" onclick="adminSelectCtf('closed')">Select closed</button>
+        <button class="btn-header" onclick="adminSelectCtf('none')">Clear</button>
+        <button class="btn-header ctf-bulk-open" id="ctfOpenSelected" onclick="adminSetSelectedCtf(true)">🔓 Open selected (0)</button>
+        <button class="btn-header" id="ctfCloseSelected" onclick="adminSetSelectedCtf(false)">🔒 Close selected (0)</button>
       </div>
     </div>
 
@@ -687,16 +595,18 @@ function renderAdminCtfPanel() {
       <table class="leaderboard-table" style="margin:0; width:100%;">
         <thead>
           <tr>
+            <th style="width:34px; text-align:center;"><input type="checkbox" id="ctfSelectAllBox" onchange="adminToggleAllCtfBoxes(this.checked)" title="Select all" /></th>
             <th style="width:60px;">#</th>
             <th>Challenge</th>
-            <th>Beside Learn task</th>
+            <th>Related Education task</th>
             <th style="text-align:center;">Solved by</th>
-            <th style="text-align:center; min-width:140px;">Status</th>
+            <th style="text-align:center; min-width:120px;">Status</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
     </div>
-    <p class="ctf-admin-help" style="margin-top:10px;">Changes reach students within a few seconds. Release state is saved to the shared cloud bucket and cached in each browser.</p>
+    <p class="ctf-admin-help" style="margin-top:10px;">Changes reach students within a few seconds. The open/closed list is saved to the shared cloud bucket and cached in each browser.</p>
   `;
+  updateCtfSelectionUI();
 }

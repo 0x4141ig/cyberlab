@@ -31,23 +31,21 @@ Runs **100% in the browser** using pure HTML5, CSS3, and modern Vanilla JavaScri
 
 ---
 
-## 🚩 CTF Mode (Learn → Practice Path)
+## 🚩 CTF Challenges (Practice What You Learned)
 
-Beyond the 38 guided Education labs, the platform has **walkthrough CTF challenges** (`ctf_questions.js`). A CTF task never shows the command: students read a mission, pick the tool, find a `CEH{...}` flag in the output and submit it. Hints are a 3-step ladder with small point costs, and a write-up appears after solving.
+Beyond the 38 guided Education labs, the platform has **walkthrough CTF challenges** (`ctf_questions.js`). A CTF task never shows the command: students read a mission, pick the tool, find a `CEH{...}` flag in the output and submit it. Hints are a 3-step ladder with small point costs, a write-up appears after solving, and a captured flag is shown with a **Copy** button.
 
-Each CTF task is paired with the Learn task it practises (`pairedWith` in `ctf_questions.js`) and appears **beside it in the sidebar**. After a student captures a flag, it is shown with a **Copy** button.
+The left sidebar has two tabs: **📘 Education** and **🚩 CTF**. Students always see the CTF tab, but every challenge is **locked and reveals nothing until the instructor opens it**.
 
-The instructor controls everything from **Admin > 🚩 CTF Control**:
+The instructor controls this from **Admin > 🚩 CTF Control**:
 
-| Setting | What it does |
-|---|---|
-| **CTF Mode ON/OFF** | OFF: students only see the Learn tasks. ON: students see a locked 🚩 card beside each Learn task that has a CTF. |
-| **Release pattern** | `5:5`, `1:1`, or custom like `E3,C1,E2,C2` (E = Learn, C = CTF). The **C** numbers set the size of each release batch (5, 1, or 1 then 2...). The **E** numbers are a pacing hint. |
-| **Release / Lock** | Nothing opens by itself. Release the next batch, the next single challenge, or toggle any challenge. Locked tasks reveal nothing. Students see changes within seconds via the shared cloud bucket. |
+- **Open or close any challenge** at any time with its own button.
+- **Open several at once**: tick the challenges and press *Open selected* (or *Close selected*). *Select closed*, *Open all* and *Close all* are there too.
+- Changes reach students within a few seconds via the shared cloud bucket, and a toast tells them when something opens.
 
-**Adding a CTF task:** copy an entry in `ctf_questions.js`, use the next id (101+), set `pairedWith` to the Learn task it practises, write the `output` with a `{{FLAG}}` placeholder, and generate `flagEnc` in the browser console with `ctfEncodeFlag("CEH{your_flag}")`.
+**Adding a CTF task:** copy an entry in `ctf_questions.js`, use the next id (101+), set `pairedWith` to the Education task it practises (shown as "Related: Task N"), write the `output` with a `{{FLAG}}` placeholder, and generate `flagEnc` in the browser console with `ctfEncodeFlag("CEH{your_flag}")`.
 
-> Flags are obfuscated (XOR + base64), not encrypted, and release gating is a classroom pacing tool. Everything ships to the browser, so this is not a security boundary. Use a server-side check if you run a competitive event.
+> Flags are obfuscated (XOR + base64), not encrypted, and open/closed gating is a classroom pacing tool. Everything ships to the browser, so this is not a security boundary. Use a server-side check if you run a competitive event.
 
 ## 📚 Curriculum Breakdown (Modules 1–5)
 
