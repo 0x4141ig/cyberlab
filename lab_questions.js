@@ -12,6 +12,8 @@
 //   scenario, tutorNotes, cehExamTip, analysisQuestion (asked once the lab is done)
 // Step fields:
 //   label        short name shown on the stepper, e.g. "Packet count (-c)"
+//   group        optional heading that groups steps in long labs (for example "Scan types")
+//   analysisQuestion  optional concept question for this step (+25 bonus, never blocks)
 //   task         instruction for this step
 //   solution     the command (drives the breakdown card and the typing guide)
 //   accepted     RegExp | string | function(cmd) => boolean
@@ -27,6 +29,14 @@
 // ============================================================================
 
 const HIDDEN_TASK_IDS = [33, 34, 35];   // ShellGPT tasks: no access to the tool right now
+
+// Argument help for the typing helpers (breakdown card, HUD, accepted-variations box).
+// Lab files add their tools here with Object.assign. app.js merges it into CLI_KNOWLEDGE_BASE.
+//   tools[tool]      = { name, category, desc, tip }
+//   toolFlags[tool]  = { "-x": { name, type, desc, val?: true, valDesc? }, ... }  (exact-case keys)
+//                      add __global: true to also fall back to the shared flag dictionary
+//   altFlags[tool]   = [ { code, desc }, ... ]   shown as "Valid argument variations"
+const LAB_TOOL_HELP = { tools: {}, toolFlags: {}, altFlags: {} };
 
 const _ln = (c) => String(c).trim().replace(/\s+/g, " ");
 const _lhas = (c, re) => re.test(" " + _ln(c) + " ");
@@ -265,6 +275,7 @@ Approximate round trip times in milli-seconds:
   // ---------------------------------------------------------------- NSLOOKUP
   {
     id: 3,
+    replaces: [27],
     module: 2,
     moduleTitle: "Module 02: Footprinting and Reconnaissance",
     title: "Nslookup: Querying DNS Records",
@@ -373,18 +384,29 @@ mail.certifiedhacker.com        internet address = 10.10.1.25`
           { check: (c) => !/soa\b/i.test(c), msg: "Specify the query type: '-type=soa'." },
           { check: (c) => !c.includes("certifiedhacker.com"), msg: "Target domain must be 'certifiedhacker.com'." }
         ],
+        highlightText: "responsible mail addr = root.box5311.bluehost.com",
         output: `Server:         10.10.1.1
 Address:        10.10.1.1#53
 
 Non-authoritative answer:
 certifiedhacker.com
-        origin = ns1.bluehost.com
-        mail addr = dnsadmin.box5331.bluehost.com
-        serial = 2026101801
+        primary name server = ns1.bluehost.com
+        responsible mail addr = root.box5311.bluehost.com
+        serial  = 2023051801
         refresh = 86400
-        retry = 7200
-        expire = 3600000
-        minimum = 300`
+        retry   = 7200
+        expire  = 3600000
+        default TTL = 86400`,
+        analysisQuestion: {
+          prompt: "According to CEH Question 4.5.1.2, what is the 'responsible mail address' recorded in the SOA record of certifiedhacker.com?",
+          options: [
+            { text: "root.box5311.bluehost.com (root@box5311.bluehost.com)", correct: true },
+            { text: "admin@certifiedhacker.com", correct: false },
+            { text: "postmaster@cloudflare.com", correct: false },
+            { text: "hostmaster@iana.org", correct: false }
+          ],
+          explanation: "In DNS SOA records, email addresses replace '@' with the first dot ('.'). The responsible mail address is root.box5311.bluehost.com."
+        }
       },
       {
         label: "Choose the DNS server",
@@ -415,12 +437,12 @@ Address: 162.159.24.80`;
   // ---------------------------------------------------------------- DIG
   {
     id: 4,
-    replaces: [5],
+    replaces: [5, 25, 26],
     module: 2,
     moduleTitle: "Module 02: Footprinting and Reconnaissance",
     title: "Dig: DNS Records & Zone Transfer",
     difficulty: "Intermediate",
-    points: 200,
+    points: 250,
     target: "certifiedhacker.com",
     prompt: "root@parrot:~#",
     scenario: "Dig is the professional's DNS tool. Learn to pull specific records, trim the output, run a reverse lookup, and finally test whether a DNS server leaks its entire zone to anyone who asks.",
@@ -468,6 +490,45 @@ mail.certifiedhacker.com. 3600  IN      A       10.10.1.25
 
 ;; Query time: 14 msec
 ;; SERVER: 10.10.1.1#53(10.10.1.1) (UDP)`
+      },
+      {
+        label: "Name servers (ns)",
+        target: "www.certifiedhacker.com",
+        task: "Use dig with the 'ns' query type to discover all authoritative DNS name servers for www.certifiedhacker.com.",
+        solution: "dig ns www.certifiedhacker.com",
+        accepted: [
+          /^dig\s+ns\s+www\.certifiedhacker\.com$/,
+          /^dig\s+www\.certifiedhacker\.com\s+ns$/
+        ],
+        hint: "Execute 'dig ns www.certifiedhacker.com' to list the authoritative name servers.",
+        diagnostics: [
+          { check: (c) => !c.startsWith("dig"), msg: "Use the 'dig' utility on Linux." },
+          { check: (c) => !/\bns\b/.test(c), msg: "Specify the 'ns' query type for Name Server records." },
+          { check: (c) => !c.includes("www.certifiedhacker.com"), msg: "Target domain is 'www.certifiedhacker.com'." }
+        ],
+        highlightText: "ns1.bluehost.com",
+        output: `; <<>> DiG 9.18.1-1-Debian <<>> ns www.certifiedhacker.com
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 48192
+;; flags: qr rd ra; QUERY: 1, ANSWER: 2, AUTHORITY: 0, ADDITIONAL: 1
+
+;; ANSWER SECTION:
+www.certifiedhacker.com. 86400 IN NS ns1.bluehost.com.
+www.certifiedhacker.com. 86400 IN NS ns2.bluehost.com.
+
+;; Query time: 14 msec
+;; SERVER: 10.10.1.1#53(10.10.1.1)
+;; WHEN: Mon Oct 19 14:15:20 UTC 2026`,
+        analysisQuestion: {
+          prompt: "What primary authoritative DNS name server was discovered for the domain www.certifiedhacker.com?",
+          options: [
+            { text: "ns1.bluehost.com", correct: true },
+            { text: "dns.google.com", correct: false },
+            { text: "ns.cloudflare.com", correct: false },
+            { text: "root-server.net", correct: false }
+          ],
+          explanation: "The ANSWER SECTION of the dig ns response returns 'www.certifiedhacker.com. IN NS ns1.bluehost.com' and 'ns2.bluehost.com'."
+        }
       },
       {
         label: "Text records (txt)",
@@ -546,7 +607,42 @@ certifiedhacker.com.    3600    IN      TXT     "google-site-verification=Zk3b9Q
 ;; SERVER: 10.10.1.1#53(10.10.1.1) (UDP)`
       },
       {
-        label: "Zone transfer (axfr @server)",
+        label: "Zone transfer attempt (refused)",
+        target: "ns1.bluehost.com (certifiedhacker.com)",
+        task: "First try a zone transfer against the public name server ns1.bluehost.com for www.certifiedhacker.com, using the 'axfr' query type.",
+        solution: "dig @ns1.bluehost.com www.certifiedhacker.com axfr",
+        accepted: [
+          /^dig\s+@ns1\.bluehost\.com\s+www\.certifiedhacker\.com\s+axfr$/,
+          /^dig\s+axfr\s+@ns1\.bluehost\.com\s+www\.certifiedhacker\.com$/,
+          /^dig\s+@ns1\.bluehost\.com\s+axfr\s+www\.certifiedhacker\.com$/
+        ],
+        hint: "Run 'dig @ns1.bluehost.com www.certifiedhacker.com axfr' to test for zone transfer permissions.",
+        diagnostics: [
+          { check: (c) => !c.startsWith("dig"), msg: "Use 'dig' to perform the zone transfer test." },
+          { check: (c) => !c.includes("@ns1.bluehost.com"), msg: "Specify the target name server with '@ns1.bluehost.com'." },
+          { check: (c) => !c.includes("axfr"), msg: "Use 'axfr' to request a full zone transfer." }
+        ],
+        highlightText: "Transfer failed.",
+        output: `; <<>> DiG 9.18.1-1-Debian <<>> @ns1.bluehost.com www.certifiedhacker.com axfr
+; (1 server found)
+;; global options: +cmd
+; Transfer failed.
+;; Query time: 38 msec
+;; SERVER: 162.241.216.11#53(ns1.bluehost.com)
+;; WHEN: Mon Oct 19 14:16:02 UTC 2026`,
+        analysisQuestion: {
+          prompt: "Based on CEH Question 4.5.1.1 and the dig output, was the DNS zone transfer permitted by ns1.bluehost.com?",
+          options: [
+            { text: "No, the transfer failed because the DNS server refused unauthenticated AXFR requests", correct: true },
+            { text: "Yes, all zone records were downloaded successfully", correct: false },
+            { text: "The name server timed out on port 53 UDP", correct: false },
+            { text: "The zone transfer succeeded over DNS over HTTPS (DoH)", correct: false }
+          ],
+          explanation: "The response explicitly states 'Transfer failed.', proving that the primary name server correctly restricts AXFR zone transfers to authorized secondary servers."
+        }
+      },
+      {
+        label: "Zone transfer (success)",
         target: "10.10.1.22 (DNS Server)",
         task: "Attempt a full DNS zone transfer (AXFR) for 'certifiedhacker.com' against the DNS server 10.10.1.22.",
         solution: "dig axfr certifiedhacker.com @10.10.1.22",

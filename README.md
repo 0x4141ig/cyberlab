@@ -37,7 +37,9 @@ Education tasks are organised **by tool**. A *lab* teaches one tool through a fe
 
 Labs live in `lab_questions.js`; the engine is `labs.js`. A lab with the same `id` as an old task replaces it, `replaces: [ids]` folds old tasks into it, `placeAfter: id` inserts a new lab, and `HIDDEN_TASK_IDS` hides tasks without deleting them. Each step takes a `label`, `task`, `solution`, `accepted`, `hint`, `diagnostics`, `output` (a string, or a function of the command), and optional `prompt` / `target` overrides (for example a Windows prompt).
 
-Every lab should get a CTF twin in `ctf_questions.js` (`pairedWith: <lab id>`).
+Every lab should get a CTF twin in the `ctf_questions*.js` files (`pairedWith: <lab id>`). Long labs such as nmap are still ONE lab: steps are grouped under headings with the `group` field.
+
+**Writing content:** see [AUTHORING.md](AUTHORING.md) for the lab and CTF format, the argument-help tables and the lab network. Write CTF flags as `flagPlain` and run `python tools/encode_flags.py`. After any change, run `contentSelfTest()` in the browser console: it must report `problems: 0` (single-step tasks that have not been converted to labs yet are listed as problems).
 
 ## 🚩 CTF Challenges (Practice What You Learned)
 

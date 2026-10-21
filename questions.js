@@ -597,7 +597,7 @@ Host script results:
 |   OS: Windows Server 2022 Standard 20348 (Windows Server 2022 6.3)
 |   OS CPE: cpe:/o:microsoft:windows_server_2022::-
 |   Computer name: WIN-SERVER2022
-|   NetBIOS computer name: WIN-SERVER2022\x00
+|   NetBIOS computer name: WIN-SERVER2022\\x00
 |   Domain name: CEH.CORP
 |   Forest name: CEH.CORP
 |   FQDN: WIN-SERVER2022.CEH.CORP
@@ -919,21 +919,21 @@ Node IpAddress: [10.10.1.19] Scope Id: []
       { check: (cmd) => !cmd.startsWith("net"), msg: "Use the Windows 'net' utility." },
       { check: (cmd) => !cmd.includes("use"), msg: "Use the 'use' subcommand." }
     ],
-    tutorNotes: "Teaching Point: Net use is a vital post-enumeration tool. Attackers establish null sessions via 'net use \\target\ipc$ \"\" /u:\"\"' to dump SAM accounts without valid credentials.",
-    highlightText: "\\10.10.1.19\CEHv13",
+    tutorNotes: "Teaching Point: Net use is a vital post-enumeration tool. Attackers establish null sessions via 'net use \\\\target\\ipc$ \"\" /u:\"\"' to dump SAM accounts without valid credentials.",
+    highlightText: "\\\\10.10.1.19\\CEHv13",
     analysisQuestion: {
       prompt: "Based on the 'net use' output, what shared network folder is actively mapped to local drive Z:?",
       options: [
-        { text: "\\10.10.1.19\CEHv13", correct: true },
-        { text: "\\10.10.1.22\SYSVOL", correct: false },
-        { text: "\\10.10.1.11\ADMIN$", correct: false },
-        { text: "\\10.10.1.5\IPC$", correct: false }
+        { text: "\\\\10.10.1.19\\CEHv13", correct: true },
+        { text: "\\\\10.10.1.22\\SYSVOL", correct: false },
+        { text: "\\\\10.10.1.11\\ADMIN$", correct: false },
+        { text: "\\\\10.10.1.5\\IPC$", correct: false }
       ],
-      explanation: "The net use output shows local drive Z: connected to remote network share \\10.10.1.19\CEHv13 over the Microsoft Windows Network."
+      explanation: "The net use output shows local drive Z: connected to remote network share \\\\10.10.1.19\\CEHv13 over the Microsoft Windows Network."
     },
     output: `Status       Local     Remote                    Network
 -------------------------------------------------------------------------------
-OK           Z:        \\10.10.1.19\CEHv13       Microsoft Windows Network
+OK           Z:        \\\\10.10.1.19\\CEHv13       Microsoft Windows Network
 The command completed successfully.`,
     cehExamTip: "Exam Alert: Net use connects to SMB/CIFS shares over TCP port 445 (or NetBIOS port 139). Connecting to IPC$ creates an Inter-Process Communication pipe."
   },
@@ -1533,20 +1533,20 @@ Host script results:
 | smb-os-discovery: 
 |   OS: Windows Server 2022 Datacenter (build 20348)
 |   Computer name: DC-WIN2022
-|   NetBIOS computer name: DC-WIN2022\x00
+|   NetBIOS computer name: DC-WIN2022\\x00
 |   Domain name: CEH.com
 | smb-enum-shares: 
 |   account_used: guest
-|   \\10.10.1.22\ADMIN$: 
+|   \\\\10.10.1.22\\ADMIN$: 
 |     Type: Special
 |     Anonymous access: <none>
-|   \\10.10.1.22\C$: 
+|   \\\\10.10.1.22\\C$: 
 |     Type: Special
 |     Anonymous access: <none>
-|   \\10.10.1.22\SYSVOL: 
+|   \\\\10.10.1.22\\SYSVOL: 
 |     Type: Read
 |     Anonymous access: READ
-|   \\10.10.1.22\NETLOGON: 
+|   \\\\10.10.1.22\\NETLOGON: 
 |     Type: Read
 |_    Anonymous access: READ`,
     cehExamTip: "Exam Alert: Port 445 runs SMB directly over TCP/IP without NetBIOS encapsulation. Default administrative shares include C$, ADMIN$, and IPC$."

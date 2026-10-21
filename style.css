@@ -2959,3 +2959,16 @@ body.ctf-task #btnTrackerToggle {
   opacity: 0.4;
   cursor: not-allowed;
 }
+
+.lab-step-group {
+  flex-basis: 100%;
+  margin-top: 4px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.lab-step-group:first-child {
+  margin-top: 0;
+}

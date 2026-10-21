@@ -35,7 +35,7 @@ function assembleEduTasks() {
 
 const EDU_TASKS = assembleEduTasks();
 
-const LAB_STEP_FIELDS = ["task", "solution", "accepted", "hint", "diagnostics", "output", "highlightText", "prompt", "target"];
+const LAB_STEP_FIELDS = ["task", "solution", "accepted", "hint", "diagnostics", "output", "highlightText", "prompt", "target", "analysisQuestion"];
 
 let labViewStep = 0;        // step the student is looking at in the current lab
 let labViewTaskId = null;   // lab the step above belongs to
@@ -80,6 +80,11 @@ function getTaskView(q, stepIdx) {
   view.stepIndex = i;
   view.stepCount = q.steps.length;
   view.stepLabel = step.label || `Step ${i + 1}`;
+  if (step.analysisQuestion) {
+    // A step can carry its own optional concept question (+25 bonus, never blocks progress)
+    view.conceptKey = `c_${q.id}_${i + 1}`;
+    view.stepConcept = true;
+  }
   return view;
 }
 
@@ -114,6 +119,7 @@ function renderLabStepper(q) {
 
   const done = labStepsDone(q);
   const max = labUnlockedMax(q);
+  let lastGroup = null;
   const chips = q.steps.map((s, i) => {
     const cls = [
       "lab-step",
@@ -121,7 +127,10 @@ function renderLabStepper(q) {
       i === labViewStep ? "viewing" : "",
       i > max ? "locked" : ""
     ].join(" ");
-    return `<button type="button" class="${cls}" ${i > max ? "disabled" : ""} onclick="goLabStep(${i})" title="${escapeHtml(s.label || "")}">
+    // Long labs (such as nmap) group their steps under small headings
+    const heading = s.group && s.group !== lastGroup ? `<div class="lab-step-group">${escapeHtml(s.group)}</div>` : "";
+    if (s.group) lastGroup = s.group;
+    return `${heading}<button type="button" class="${cls}" ${i > max ? "disabled" : ""} onclick="goLabStep(${i})" title="${escapeHtml(s.label || "")}">
       <span class="lab-step-no">${i < done ? "✓" : i + 1}</span>
       <span class="lab-step-label">${escapeHtml(s.label || `Step ${i + 1}`)}</span>
     </button>`;
@@ -143,6 +152,7 @@ function goLabStep(i) {
   labViewStep = i;
   applyTaskView(q);
   hideGuidance();
+  if (!(currentUser && currentUser.solved.includes(q.id))) elConceptCard.style.display = "none";
   renderLabStepper(q);
   updateCtfHintButton(q);
   if (elTerminalInput) elTerminalInput.focus();
@@ -180,6 +190,9 @@ function handleLabStepSuccess(q) {
     "success",
     `<strong>Step ${viewing + 1} of ${total} complete!</strong> Read the output, then move on.${nextStepButton(q, viewing)}`
   );
+
+  // Optional per-step concept question (bonus points, does not block the next step)
+  if (q.steps[viewing].analysisQuestion) renderConceptQuestion(getTaskView(q, viewing), false);
 }
 
 // Last step finished: score the lab and open the concept question
@@ -200,9 +213,90 @@ function completeLab(q) {
     `<strong>Lab Complete!</strong> All ${q.steps.length} steps done.<br>
      Now answer the <strong>CEH Purpose Check</strong> below to confirm your analysis.`
   );
-  renderConceptQuestion(q, false);
+  // Lab-level concept question; if the lab has none, fall back to the last step's own one
+  const lastStep = q.steps.length - 1;
+  if (q.analysisQuestion) renderConceptQuestion(q, false);
+  else if (q.steps[lastStep].analysisQuestion) renderConceptQuestion(getTaskView(q, lastStep), false);
 
   const term = document.querySelector(".terminal-pane");
   term.classList.add("pulse-success");
   setTimeout(() => term.classList.remove("pulse-success"), 1000);
+}
+
+// ----------------------------------------------------------------------------
+// Content self-test: run contentSelfTest() in the browser console after editing
+// labs or CTFs. It checks every lab and CTF and returns the list of problems.
+// ----------------------------------------------------------------------------
+function contentSelfTest() {
+  const problems = [];
+  const warn = (m) => problems.push(m);
+  const seen = new Set();
+
+  const checkAccepted = (where, q, cmd) => {
+    const rules = q.accepted;
+    if (!Array.isArray(rules) || !rules.length) { warn(`${where}: no accepted rules`); return false; }
+    if (!cmd) { warn(`${where}: no solution`); return false; }
+    if (!rules.some((r) => matchesAcceptedRule(r, cmd))) { warn(`${where}: solution "${cmd}" is not accepted by its own rules`); return false; }
+    return true;
+  };
+
+  const checkConcept = (where, aq) => {
+    if (!aq) return;
+    if (!aq.prompt || !Array.isArray(aq.options) || aq.options.length < 3) warn(`${where}: concept question needs a prompt and 3+ options`);
+    else if (aq.options.filter((o) => o.correct).length !== 1) warn(`${where}: concept question needs exactly one correct option`);
+    if (!aq.explanation) warn(`${where}: concept question has no explanation`);
+  };
+
+  ALL_TASKS.forEach((q) => {
+    const tag = `${isCtfTask(q) ? "CTF" : "Task"} ${q.id}`;
+    if (seen.has(q.id)) warn(`${tag}: duplicate id`);
+    seen.add(q.id);
+    if (!q.title || !q.scenario || !q.prompt || !q.target) warn(`${tag}: missing title, scenario, prompt or target`);
+    if (!(q.module >= 1 && q.module <= 5)) warn(`${tag}: module must be 1 to 5`);
+    if (!q.cehExamTip) warn(`${tag}: missing cehExamTip`);
+
+    if (isCtfTask(q)) {
+      const flag = getTaskFlag(q);
+      if (!/^CEH\{[A-Za-z0-9_]+\}$/.test(flag)) warn(`${tag}: flag missing or malformed (${flag || "no flagEnc"})`);
+      if (q.flagPlain) warn(`${tag}: flagPlain left in the source, encode it into flagEnc`);
+      if (!Array.isArray(q.hints) || q.hints.length !== 3) warn(`${tag}: needs exactly 3 hints`);
+      else if (q.hints[2].replace(/^Hint 3:\s*/, "").trim() !== q.solution) warn(`${tag}: hint 3 should be exactly the solution command`);
+      if (!q.writeup) warn(`${tag}: missing writeup`);
+      if (!q.output || (!q.output.includes("{{FLAG}}") && !q.derivedFlag)) warn(`${tag}: output has no {{FLAG}} (set derivedFlag: true if the flag is built from the output)`);
+      if (q.pairedWith !== undefined && !EDU_TASKS.some((t) => t.id === q.pairedWith)) warn(`${tag}: pairedWith ${q.pairedWith} is not an Education task`);
+      checkAccepted(tag, q, q.solution);
+      return;
+    }
+
+    if (isLab(q)) {
+      if (!q.analysisQuestion && !q.steps[q.steps.length - 1].analysisQuestion) warn(`${tag}: lab has no concept question`);
+      checkConcept(tag, q.analysisQuestion);
+      if (!q.tutorNotes) warn(`${tag}: missing tutorNotes`);
+      q.steps.forEach((st, i) => {
+        const w = `${tag} step ${i + 1}`;
+        if (!st.label || !st.task || !st.hint) warn(`${w}: missing label, task or hint`);
+        if (st.output === undefined) { warn(`${w}: missing output`); }
+        else {
+          const out = typeof st.output === "function" ? st.output(st.solution) : st.output;
+          if (typeof out !== "string" || !out.trim()) warn(`${w}: output is empty`);
+        }
+        if (!Array.isArray(st.diagnostics) || !st.diagnostics.length) warn(`${w}: no diagnostics`);
+        else if (st.diagnostics.some((d) => { try { return d.check(st.solution); } catch (e) { return false; } })) warn(`${w}: a diagnostic fires on the correct solution`);
+        checkAccepted(w, st, st.solution);
+        checkConcept(w, st.analysisQuestion);
+      });
+      if (!ctfIndexes().some((i) => ALL_TASKS[i].pairedWith === q.id)) warn(`${tag} (${q.title}): no CTF is paired with this lab`);
+    } else {
+      warn(`${tag} (${q.title}): still a single-step task, convert it to a lab`);
+    }
+  });
+
+  const summary = {
+    educationTasks: EDU_TASKS.length,
+    labs: EDU_TASKS.filter(isLab).length,
+    steps: EDU_TASKS.filter(isLab).reduce((n, q) => n + q.steps.length, 0),
+    ctfs: ctfIndexes().length,
+    problems: problems.length
+  };
+  return { summary, problems };
 }

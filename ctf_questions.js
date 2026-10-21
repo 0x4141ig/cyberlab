@@ -13,7 +13,9 @@
 //   * accepted      -> RegExp, string, or function(cmd) => boolean
 //   * output        -> terminal output; put {{FLAG}} where the flag should appear
 //   * outputVariants-> optional [{ test: RegExp|fn, output }] for alternate tools
-//   * flagEnc       -> obfuscated flag. Generate it from the browser console with
+//   * flagPlain     -> write the flag here, then run tools/encode_flags.py: it becomes flagEnc
+//   * derivedFlag   -> true when the flag is built from the output (no {{FLAG}} in it)
+//   * flagEnc       -> obfuscated flag. Or generate it from the browser console with
 //                      ctfEncodeFlag("CEH{your_flag_here}")
 //                      (obfuscation keeps flags out of casual view-source; it is
 //                       not cryptographic security, which is fine for a class.)
@@ -292,7 +294,7 @@ Sitemap: http://10.10.1.22/sitemap.xml`,
   {
     id: 106,
     type: "ctf",
-    pairedWith: 10,
+    pairedWith: 7,
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "Odd Service in the Version Column",
@@ -339,7 +341,7 @@ Nmap done: 1 IP address (1 host up) scanned in 14.52 seconds`,
   {
     id: 107,
     type: "ctf",
-    pairedWith: 12,
+    pairedWith: 7,
     module: 3,
     moduleTitle: "CTF · Scanning Networks",
     title: "What Is the Page Called?",
@@ -389,7 +391,7 @@ Nmap done: 1 IP address (1 host up) scanned in 6.31 seconds`,
   {
     id: 108,
     type: "ctf",
-    pairedWith: 30,
+    pairedWith: 7,
     module: 4,
     moduleTitle: "CTF · Enumeration",
     title: "Mail Server Greeting",
@@ -431,7 +433,7 @@ Nmap done: 1 IP address (1 host up) scanned in 1.12 seconds`,
   {
     id: 109,
     type: "ctf",
-    pairedWith: 32,
+    pairedWith: 7,
     module: 4,
     moduleTitle: "CTF · Enumeration",
     title: "The Share Nobody Remembered",
@@ -535,6 +537,7 @@ IF-MIB::ifNumber.0 = INTEGER: 2`,
   {
     id: 111,
     type: "ctf",
+    derivedFlag: true,
     pairedWith: 1,
     module: 1,
     moduleTitle: "CTF · Introduction to Ethical Hacking",
@@ -575,6 +578,7 @@ rtt min/avg/max/mdev = 0.287/0.302/0.318/0.013 ms`,
   {
     id: 112,
     type: "ctf",
+    derivedFlag: true,
     pairedWith: 2,
     module: 1,
     moduleTitle: "CTF · Introduction to Ethical Hacking",

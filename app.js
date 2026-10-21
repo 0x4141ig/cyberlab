@@ -883,7 +883,7 @@ function selectConceptAnswer(q, option, btnElement) {
     btnElement.classList.add("correct");
 
     if (currentUser) {
-      const conceptKey = `c_${q.id}`;
+      const conceptKey = q.conceptKey || `c_${q.id}`;
       if (!currentUser.conceptSolved.includes(conceptKey)) {
         currentUser.conceptSolved.push(conceptKey);
         currentUser.score += 25;
@@ -900,7 +900,9 @@ function selectConceptAnswer(q, option, btnElement) {
       <strong>Correct Analysis! (+25 Bonus Points)</strong><br>
       ${q.analysisQuestion.explanation}<br>
       <span style="color:var(--accent-yellow); font-size:0.78rem;">✓ Evidence highlighted in yellow in the terminal!</span><br>
-      <button class="btn-header" style="margin-top:8px;" onclick="nextQuestion()">Proceed to Next Task &rarr;</button>
+      ${q.stepConcept && q.stepIndex + 1 < q.stepCount
+         ? `<button class="btn-header" style="margin-top:8px;" onclick="goLabStep(${q.stepIndex + 1})">Continue to step ${q.stepIndex + 2} &rarr;</button>`
+         : `<button class="btn-header" style="margin-top:8px;" onclick="nextQuestion()">Proceed to Next Task &rarr;</button>`}
     `;
     elConceptFeedback.style.display = "block";
 
@@ -3101,8 +3103,23 @@ CLI_KNOWLEDGE_BASE.toolFlags = {
 // Look up help for a flag: tool-specific first (exact case), then the global dictionary
 function lookupFlagInfo(tool, token) {
   const tf = CLI_KNOWLEDGE_BASE.toolFlags[tool];
-  if (tf) return tf[token] || tf[token.toLowerCase()] || null;
+  if (tf) {
+    const hit = tf[token] || tf[token.toLowerCase()];
+    if (hit) return hit;
+    // A tool can opt in to the shared dictionary with __global: true
+    return tf.__global ? (CLI_KNOWLEDGE_BASE.flags[token.toLowerCase()] || null) : null;
+  }
   return CLI_KNOWLEDGE_BASE.flags[token.toLowerCase()] || null;
+}
+
+// Merge the argument help that the lab files declare (see LAB_TOOL_HELP in lab_questions.js)
+if (typeof LAB_TOOL_HELP !== "undefined") {
+  Object.keys(LAB_TOOL_HELP.tools).forEach((k) => {
+    CLI_KNOWLEDGE_BASE.tools[k] = Object.assign({}, CLI_KNOWLEDGE_BASE.tools[k], LAB_TOOL_HELP.tools[k]);
+  });
+  Object.keys(LAB_TOOL_HELP.toolFlags).forEach((k) => {
+    CLI_KNOWLEDGE_BASE.toolFlags[k] = Object.assign({}, CLI_KNOWLEDGE_BASE.toolFlags[k], LAB_TOOL_HELP.toolFlags[k]);
+  });
 }
 
 // Real-Time CLI Parameter Intellisense HUD Updater
@@ -3391,7 +3408,10 @@ function renderCommandBreakdown(q) {
   // Accepted Pro / Alternative Flags Box
   if (altBox) {
     const altFlags = [];
-    if (tool === "nmap") {
+    const labAlt = (typeof LAB_TOOL_HELP !== "undefined" && LAB_TOOL_HELP.altFlags && LAB_TOOL_HELP.altFlags[tool]) || null;
+    if (labAlt) {
+      labAlt.forEach((f) => altFlags.push(f));
+    } else if (tool === "nmap") {
       altFlags.push({ code: "-Pn", desc: "Skip ICMP ping / bypass firewall" });
       altFlags.push({ code: "-T4", desc: "Aggressive speed template" });
       altFlags.push({ code: "-p-", desc: "Scan all 65,535 ports" });
