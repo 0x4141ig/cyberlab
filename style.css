@@ -2040,7 +2040,7 @@ header {
 .modules-sidebar.collapsed {
   width: 0 !important;
   min-width: 0 !important;
-  margin-left: -295px;
+  margin-left: 0;
   border-right: none;
   opacity: 0;
   pointer-events: none;
