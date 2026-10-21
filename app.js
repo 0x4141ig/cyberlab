@@ -382,6 +382,14 @@ function renderQuestionGrid() {
     elQuestionGrid.appendChild(group);
   });
 
+  if (!elQuestionGrid.children.length) {
+    const empty = document.createElement("div");
+    empty.className = "sidebar-empty-state";
+    empty.style.cssText = "padding:18px 12px; text-align:center; color:var(--text-muted); font-size:0.82rem;";
+    empty.innerText = "No tasks match your search.";
+    elQuestionGrid.appendChild(empty);
+  }
+
   // Scroll active task into view within sidebar
   const activeCard = document.getElementById(`sidebarTask_${currentIndex}`);
   if (activeCard) {
@@ -939,8 +947,7 @@ function isCloudApiAvailable() {
 async function fetchDirectCloudUsers() {
   try {
     const resp = await fetch(`${AUTO_CLOUD_DB_BASE}/users?t=${Date.now()}`, {
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache, no-store" }
+      cache: "no-store"
     });
     if (!resp.ok) return {};
     return await resp.json();
@@ -964,8 +971,7 @@ async function saveDirectCloudUsers(users) {
 async function fetchDirectCloudLeaderboard() {
   try {
     const resp = await fetch(`${AUTO_CLOUD_DB_BASE}/leaderboard?t=${Date.now()}`, {
-      cache: "no-store",
-      headers: { "Cache-Control": "no-cache, no-store" }
+      cache: "no-store"
     });
     if (!resp.ok) return [];
     return await resp.json();
@@ -1631,7 +1637,7 @@ async function fetchCloudLeaderboard() {
   // 2. Vercel Serverless API Query
   try {
     const url = getApiUrl() + "?t=" + Date.now();
-    const res = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
+    const res = await fetch(url, { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       if (data && data.status === "ok" && Array.isArray(data.leaderboard)) {
@@ -2183,7 +2189,7 @@ async function fetchAdminUsers() {
   // 1. Try Vercel Serverless API
   try {
     const url = getApiUrl() + "?action=admin_users&t=" + Date.now();
-    const res = await fetch(url, { cache: "no-store", headers: { "Cache-Control": "no-cache" } });
+    const res = await fetch(url, { cache: "no-store" });
     if (res.ok) {
       const data = await res.json();
       if (data && data.status === "ok" && Array.isArray(data.users)) {
@@ -3224,6 +3230,11 @@ window.addEventListener("DOMContentLoaded", async () => {
     saveStoredUsers(users);
   }
 
+  // Strictly keep appRoot hidden until user logs in or registers.
+  // (Reset before any network await so a fast login is never wiped by slow cloud sync.)
+  currentUser = null;
+  updateAuthUI();
+
   // Auto-discover Supabase credentials if deployed on Vercel
   await autoDiscoverCloudConfig();
   updateCloudStatusIndicator();
@@ -3232,8 +3243,4 @@ window.addEventListener("DOMContentLoaded", async () => {
   if (initialLb && initialLb.length > 0) {
     renderLeaderboardRows(initialLb);
   }
-
-  // Strictly keep appRoot hidden until user logs in or registers
-  currentUser = null;
-  updateAuthUI();
 });
